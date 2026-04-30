@@ -619,12 +619,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         </form>
 
         <a
-          href="https://github.com/151henry151/bitcoinex-explorer"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="https://hromp.com/bitcoinex-explorer/"
           class="ml-auto shrink-0 text-sm text-zinc-400 hover:text-[#f7931a]"
         >
-          GitHub
+          About
         </a>
       </div>
     </header>

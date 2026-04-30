@@ -5,6 +5,11 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-04-30
+
+- Replace top-nav **GitHub** link with **About** pointing at **`https://hromp.com/bitcoinex-explorer/`**; document footer GitHub links in **`README.md`**.
+- Note Esplora **upstream dependency** under Known limitations in **`README.md`**.
+
 ## [0.3.0] - 2026-04-30
 
 - Add **`BitcoinexExplorer.Esplora`** (Tesla + Hackney) for Esplora-compatible REST calls with **`ESPLORA_BASE_URL`** (**`config/runtime.exs`**).

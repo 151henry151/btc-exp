@@ -5,8 +5,10 @@
 | Resource | URL |
 |----------|-----|
 | **Live app** | [https://hromp.com/btcexp/](https://hromp.com/btcexp/) |
-| **Landing page** (about) | [https://hromp.com/bitcoinex-explorer/](https://hromp.com/bitcoinex-explorer/) |
+| **Landing page** (marketing / architecture overview) | [https://hromp.com/bitcoinex-explorer/](https://hromp.com/bitcoinex-explorer/) |
 | **Source** | [https://github.com/151henry151/bitcoinex-explorer](https://github.com/151henry151/bitcoinex-explorer) |
+
+The running app’s top nav links **About** to that landing page; **GitHub** / upstream Bitcoinex links remain in the page footer.
 
 Licensed under the **MIT License** — see [`LICENSE`](LICENSE).
 
@@ -138,6 +140,7 @@ Playwright **`baseURL`** must include the mount path when the app is served unde
 
 ## Known limitations
 
+- Live chain views depend on the configured Esplora-compatible endpoint (**availability, rate limits, and fork/network choices are upstream concerns**).
 - Legacy Base58 decoding is best-effort classification using version-byte prefixes.
 - PSBT **unsigned transaction ID** is not shown as a real txid — unsigned PSBTs do not have a valid txid until finalized.
 - Auto-detection assumes **BOLT11** strings start with **`ln`** and **PSBT** base64 starts with the standard magic; unusual encodings may need future heuristics.
