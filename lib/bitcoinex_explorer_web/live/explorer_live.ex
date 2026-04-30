@@ -588,17 +588,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             GitHub
           </.link>
         </nav>
-        <p class="mt-2">
-          Chain data via Esplora-compatible API · Built with River Financial's
-          <a
-            href="https://github.com/RiverFinancial/bitcoinex"
-            class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Bitcoinex
-          </a>
-        </p>
       </footer>
     </div>
     """
@@ -684,9 +673,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           </span>
           Live blocks
         </h2>
-        <p class="mb-2 text-xs text-zinc-500">
-          <%= length(@blocks) %> recent blocks (tip downward). Scroll the table for more — up to ~100 loaded from Esplora.
-        </p>
         <p :if={@blocks_error} class="mb-2 text-sm text-orange-300"><%= @blocks_error %></p>
         <div class="overflow-x-auto rounded-lg border border-zinc-800">
           <div class="max-h-[11rem] overflow-y-auto overscroll-y-contain">

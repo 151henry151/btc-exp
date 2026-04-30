@@ -5,6 +5,10 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-04-30
+
+- Remove Live blocks caption line and footer Esplora / Bitcoinex attribution from **`ExplorerLive`**.
+
 ## [0.4.6] - 2026-04-30
 
 - Load home dashboard Esplora data only when **`connected?(socket)`** (skip disconnected **`handle_params`** pass).
