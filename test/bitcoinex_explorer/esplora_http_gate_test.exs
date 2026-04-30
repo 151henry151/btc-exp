@@ -9,15 +9,15 @@ defmodule BitcoinexExplorer.EsploraHttpGateTest do
       assert EsploraHttpGate.compute_wait_ms(1000, 0, -5) == 0
     end
 
-    test "returns 0 when no prior completion (first request)" do
+    test "returns 0 when no prior request start (first request)" do
       assert EsploraHttpGate.compute_wait_ms(99, nil, 250) == 0
     end
 
-    test "returns 0 when enough time has passed since last completion" do
+    test "returns 0 when enough time has passed since last request start" do
       assert EsploraHttpGate.compute_wait_ms(500, 100, 250) == 0
     end
 
-    test "returns remaining gap when calls would be too close" do
+    test "returns remaining gap when the next start would be too soon" do
       assert EsploraHttpGate.compute_wait_ms(300, 100, 250) == 50
     end
   end

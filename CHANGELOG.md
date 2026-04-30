@@ -5,6 +5,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-04-30
+
+- Space **`EsploraHttpGate`** by **request start** time (not response completion); raise prod default **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** to **300** ms.
+- Retry **`Esplora`** GETs once after **HTTP 429** with **`ESPLORA_429_RETRY_DELAY_MS`** / **`ESPLORA_HTTP_MAX_ATTEMPTS`** (defaults **2000** ms and **2** tries).
+- Restore **`EsploraCache`** wrapping on **`recent_blocks`**, **`mempool`**, and **`fee_estimates`**; restore **`EsploraCache.init_table`** in **`Application.start/2`**.
+- Document reference nginx limits and Blockstream Explorer API / dashboard policy in **`README.md`**; expand **`.env.production.example`**.
+
 ## [0.4.3] - 2026-04-30
 
 - Add **`BitcoinexExplorer.EsploraHttpGate`** (supervised when **`DATA_SOURCE=esplora`**): serialize Esplora HTTP and enforce **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** between completions (prod default **250** ms when unset).

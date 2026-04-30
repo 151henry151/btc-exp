@@ -24,7 +24,9 @@ config :bitcoinex_explorer,
   ],
   fulcrum_request_timeout: 15_000,
   esplora_cache_ttl_ms: 0,
-  esplora_min_request_interval_ms: 0
+  esplora_min_request_interval_ms: 0,
+  esplora_http_max_attempts: 2,
+  esplora_429_retry_delay_ms: 2_000
 
 # Configures the endpoint
 config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint,

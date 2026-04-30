@@ -23,6 +23,23 @@ defmodule BitcoinexExplorer.EsploraTest do
     assert {:ok, [%{"id" => "abc"}]} = BitcoinexExplorer.Esplora.blocks()
   end
 
+  test "blocks retries once after HTTP 429 then succeeds", %{bypass: bypass} do
+    {:ok, agent} = Agent.start_link(fn -> 0 end)
+
+    Bypass.expect(bypass, "GET", "/blocks", fn conn ->
+      conn = Plug.Conn.put_resp_content_type(conn, "application/json")
+      n = Agent.get_and_update(agent, fn i -> {i, i + 1} end)
+
+      case n do
+        0 -> Plug.Conn.resp(conn, 429, "{}")
+        _ -> Plug.Conn.resp(conn, 200, Jason.encode!([%{"id" => "abc", "height" => 1}]))
+      end
+    end)
+
+    assert {:ok, [%{"id" => "abc"}]} = BitcoinexExplorer.Esplora.blocks()
+    Agent.stop(agent)
+  end
+
   test "recent_blocks follows /blocks then /blocks/<height> until limit", %{bypass: bypass} do
     batch1 =
       for h <- 20..11//-1,

@@ -16,3 +16,6 @@ config :phoenix, :plug_init_mode, :runtime
 # Enable helpful, but potentially expensive runtime checks
 config :phoenix_live_view,
   enable_expensive_runtime_checks: true
+
+# Fast Esplora 429 retry tests (see Esplora.do_get_* retry chain).
+config :bitcoinex_explorer, esplora_429_retry_delay_ms: 15

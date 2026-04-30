@@ -41,40 +41,82 @@ defmodule BitcoinexExplorer.Esplora do
     BitcoinexExplorer.EsploraHttpGate.run(fun)
   end
 
+  defp esplora_http_max_attempts do
+    Application.get_env(:bitcoinex_explorer, :esplora_http_max_attempts, 2)
+  end
+
+  defp esplora_429_retry_delay_ms do
+    Application.get_env(:bitcoinex_explorer, :esplora_429_retry_delay_ms, 2_000)
+  end
+
   defp get_json(path) do
-    run_esplora_http(fn ->
-      case Tesla.get(client_json(), path) do
-        {:ok, %Env{status: 200, body: body}} when is_map(body) or is_list(body) ->
-          {:ok, body}
-
-        {:ok, %Env{status: 404}} ->
-          {:error, :not_found}
-
-        {:ok, %Env{status: status, body: body}} ->
-          {:error, {:http_error, status, body}}
-
-        {:error, reason} ->
-          {:error, {:transport, reason}}
-      end
-    end)
+    run_esplora_http(fn -> fetch_json_with_retries(path, 1) end)
   end
 
   defp get_raw(path) do
-    run_esplora_http(fn ->
-      case Tesla.get(client_raw(), path) do
-        {:ok, %Env{status: 200, body: body}} when is_binary(body) ->
-          {:ok, body}
+    run_esplora_http(fn -> fetch_raw_with_retries(path, 1) end)
+  end
 
-        {:ok, %Env{status: 404}} ->
-          {:error, :not_found}
+  defp fetch_json_with_retries(path, attempt) do
+    case do_get_json_once(path) do
+      {:error, {:http_error, 429, _body}} = err ->
+        if attempt < esplora_http_max_attempts() do
+          Process.sleep(esplora_429_retry_delay_ms())
+          fetch_json_with_retries(path, attempt + 1)
+        else
+          err
+        end
 
-        {:ok, %Env{status: status, body: body}} ->
-          {:error, {:http_error, status, body}}
+      other ->
+        other
+    end
+  end
 
-        {:error, reason} ->
-          {:error, {:transport, reason}}
-      end
-    end)
+  defp fetch_raw_with_retries(path, attempt) do
+    case do_get_raw_once(path) do
+      {:error, {:http_error, 429, _body}} = err ->
+        if attempt < esplora_http_max_attempts() do
+          Process.sleep(esplora_429_retry_delay_ms())
+          fetch_raw_with_retries(path, attempt + 1)
+        else
+          err
+        end
+
+      other ->
+        other
+    end
+  end
+
+  defp do_get_json_once(path) do
+    case Tesla.get(client_json(), path) do
+      {:ok, %Env{status: 200, body: body}} when is_map(body) or is_list(body) ->
+        {:ok, body}
+
+      {:ok, %Env{status: 404}} ->
+        {:error, :not_found}
+
+      {:ok, %Env{status: status, body: body}} ->
+        {:error, {:http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, {:transport, reason}}
+    end
+  end
+
+  defp do_get_raw_once(path) do
+    case Tesla.get(client_raw(), path) do
+      {:ok, %Env{status: 200, body: body}} when is_binary(body) ->
+        {:ok, body}
+
+      {:ok, %Env{status: 404}} ->
+        {:error, :not_found}
+
+      {:ok, %Env{status: status, body: body}} ->
+        {:error, {:http_error, status, body}}
+
+      {:error, reason} ->
+        {:error, {:transport, reason}}
+    end
   end
 
   @spec blocks() :: {:ok, list()} | {:error, term()}
@@ -86,6 +128,12 @@ defmodule BitcoinexExplorer.Esplora do
   """
   @spec recent_blocks(pos_integer()) :: {:ok, list()} | {:error, term()}
   def recent_blocks(limit \\ 100) when is_integer(limit) and limit > 0 do
+    BitcoinexExplorer.EsploraCache.get_or_fetch({:recent_blocks, limit}, fn ->
+      recent_blocks_uncached(limit)
+    end)
+  end
+
+  defp recent_blocks_uncached(limit) do
     case blocks() do
       {:ok, batch} when is_list(batch) and batch != [] ->
         fetch_more_recent_batches(batch, limit, 0)
@@ -177,10 +225,16 @@ defmodule BitcoinexExplorer.Esplora do
   end
 
   @spec mempool() :: {:ok, map()} | {:error, term()}
-  def mempool, do: get_json("/mempool")
+  def mempool do
+    BitcoinexExplorer.EsploraCache.get_or_fetch(:mempool, fn -> get_json("/mempool") end)
+  end
 
   @spec fee_estimates() :: {:ok, map()} | {:error, term()}
-  def fee_estimates, do: get_json("/fee-estimates")
+  def fee_estimates do
+    BitcoinexExplorer.EsploraCache.get_or_fetch(:fee_estimates, fn ->
+      get_json("/fee-estimates")
+    end)
+  end
 
   @spec mempool_recent() :: {:ok, list()} | {:error, term()}
   def mempool_recent, do: get_json("/mempool/recent")

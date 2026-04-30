@@ -99,7 +99,8 @@ esplora_cache_ttl_ms =
 esplora_min_request_interval_ms =
   case System.get_env("ESPLORA_MIN_REQUEST_INTERVAL_MS", "") |> String.trim() do
     "" ->
-      if config_env() == :prod, do: 250, else: 0
+      # Reference Esplora nginx uses ~5 req/s for `/api/`; ~300 ms between starts keeps a margin.
+      if config_env() == :prod, do: 300, else: 0
 
     s ->
       case Integer.parse(s) do
@@ -112,6 +113,28 @@ config :bitcoinex_explorer,
   esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api"),
   esplora_cache_ttl_ms: esplora_cache_ttl_ms,
   esplora_min_request_interval_ms: esplora_min_request_interval_ms
+
+case System.get_env("ESPLORA_429_RETRY_DELAY_MS", "") |> String.trim() do
+  "" ->
+    :ok
+
+  s ->
+    case Integer.parse(s) do
+      {n, _} when n >= 0 -> config :bitcoinex_explorer, esplora_429_retry_delay_ms: n
+      _ -> :ok
+    end
+end
+
+case System.get_env("ESPLORA_HTTP_MAX_ATTEMPTS", "") |> String.trim() do
+  "" ->
+    :ok
+
+  s ->
+    case Integer.parse(s) do
+      {n, _} when n >= 1 -> config :bitcoinex_explorer, esplora_http_max_attempts: n
+      _ -> :ok
+    end
+end
 
 # Note: data_source_module / Fulcrum / Bitcoin RPC env vars are applied earlier in this file.
 

@@ -7,10 +7,11 @@ defmodule BitcoinexExplorer.Application do
 
   @impl true
   def start(_type, _args) do
+    BitcoinexExplorer.EsploraCache.init_table()
+
     base = [
       BitcoinexExplorerWeb.Telemetry,
-      {DNSCluster,
-       query: Application.get_env(:bitcoinex_explorer, :dns_cluster_query) || :ignore},
+      {DNSCluster, query: Application.get_env(:bitcoinex_explorer, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: BitcoinexExplorer.PubSub}
     ]
 
