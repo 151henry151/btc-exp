@@ -23,7 +23,8 @@ config :bitcoinex_explorer,
     server_name_indication: :disable
   ],
   fulcrum_request_timeout: 15_000,
-  esplora_cache_ttl_ms: 0
+  esplora_cache_ttl_ms: 0,
+  esplora_min_request_interval_ms: 0
 
 # Configures the endpoint
 config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint,

@@ -7,8 +7,6 @@ defmodule BitcoinexExplorer.Application do
 
   @impl true
   def start(_type, _args) do
-    BitcoinexExplorer.EsploraCache.init_table()
-
     base = [
       BitcoinexExplorerWeb.Telemetry,
       {DNSCluster,
@@ -23,7 +21,16 @@ defmodule BitcoinexExplorer.Application do
         []
       end
 
-    children = base ++ fulcrum ++ [BitcoinexExplorerWeb.Endpoint]
+    esplora_http_gate =
+      if Application.get_env(:bitcoinex_explorer, :data_source_module) ==
+           BitcoinexExplorer.Esplora and
+           Application.get_env(:bitcoinex_explorer, :esplora_min_request_interval_ms, 0) > 0 do
+        [BitcoinexExplorer.EsploraHttpGate]
+      else
+        []
+      end
+
+    children = base ++ fulcrum ++ esplora_http_gate ++ [BitcoinexExplorerWeb.Endpoint]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

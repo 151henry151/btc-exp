@@ -5,6 +5,11 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-04-30
+
+- Add **`BitcoinexExplorer.EsploraHttpGate`** (supervised when **`DATA_SOURCE=esplora`**): serialize Esplora HTTP and enforce **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** between completions (prod default **250** ms when unset).
+- Route **`Esplora`** **`get_json`** / **`get_raw`** through the gate when the interval is positive.
+
 ## [0.4.2] - 2026-04-30
 
 - Replace technical **HTTP 429** LiveView copy with plain-language text for visitors.

@@ -81,6 +81,7 @@ Environment highlights (**`.env.production.example`**):
 - **`PORT`** (e.g. **40174**), **`PHX_HOST`**, **`PHX_PATH=btcexp`** (must match the URL prefix the proxy strips/forwards), **`PHX_SERVER=true`**, **`MIX_ENV=prod`**.
 - Optional **`ESPLORA_BASE_URL`** (defaults to **`https://blockstream.info/api`**) when **`DATA_SOURCE=esplora`** (default).
 - **`ESPLORA_CACHE_TTL_MS`** — In **`MIX_ENV=prod`**, defaults to **45000** (45 seconds): dashboard Esplora calls (**recent blocks**, **mempool**, **fee estimates**) are cached in ETS so concurrent visitors do not each run full **`recent_blocks`** pagination. Set **`0`** to disable. Public APIs (e.g. Blockstream) often return **HTTP 429** under heavy traffic; mitigations include your own **`ESPLORA_BASE_URL`**, a higher TTL, slower UI polling (ship defaults), or **`DATA_SOURCE=rpc`**.
+- **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** — When **`DATA_SOURCE=esplora`**, **`MIX_ENV=prod`** defaults to **250** ms if unset: all Esplora HTTP runs through **`BitcoinexExplorer.EsploraHttpGate`**, which serves one request at a time and waits so consecutive calls are spaced (similar guidance community reports for avoiding **429** on public endpoints). Set **`0`** to disable spacing (e.g. private Esplora with generous limits).
 - **`DATA_SOURCE`** — **`esplora`** (default) or **`rpc`** (Bitcoin Core + Fulcrum); see **Self-hosting with a Bitcoin full node**.
 
 ---

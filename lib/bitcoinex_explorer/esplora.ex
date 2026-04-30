@@ -37,36 +37,44 @@ defmodule BitcoinexExplorer.Esplora do
     Application.fetch_env!(:bitcoinex_explorer, :esplora_base_url)
   end
 
+  defp run_esplora_http(fun) when is_function(fun, 0) do
+    BitcoinexExplorer.EsploraHttpGate.run(fun)
+  end
+
   defp get_json(path) do
-    case Tesla.get(client_json(), path) do
-      {:ok, %Env{status: 200, body: body}} when is_map(body) or is_list(body) ->
-        {:ok, body}
+    run_esplora_http(fn ->
+      case Tesla.get(client_json(), path) do
+        {:ok, %Env{status: 200, body: body}} when is_map(body) or is_list(body) ->
+          {:ok, body}
 
-      {:ok, %Env{status: 404}} ->
-        {:error, :not_found}
+        {:ok, %Env{status: 404}} ->
+          {:error, :not_found}
 
-      {:ok, %Env{status: status, body: body}} ->
-        {:error, {:http_error, status, body}}
+        {:ok, %Env{status: status, body: body}} ->
+          {:error, {:http_error, status, body}}
 
-      {:error, reason} ->
-        {:error, {:transport, reason}}
-    end
+        {:error, reason} ->
+          {:error, {:transport, reason}}
+      end
+    end)
   end
 
   defp get_raw(path) do
-    case Tesla.get(client_raw(), path) do
-      {:ok, %Env{status: 200, body: body}} when is_binary(body) ->
-        {:ok, body}
+    run_esplora_http(fn ->
+      case Tesla.get(client_raw(), path) do
+        {:ok, %Env{status: 200, body: body}} when is_binary(body) ->
+          {:ok, body}
 
-      {:ok, %Env{status: 404}} ->
-        {:error, :not_found}
+        {:ok, %Env{status: 404}} ->
+          {:error, :not_found}
 
-      {:ok, %Env{status: status, body: body}} ->
-        {:error, {:http_error, status, body}}
+        {:ok, %Env{status: status, body: body}} ->
+          {:error, {:http_error, status, body}}
 
-      {:error, reason} ->
-        {:error, {:transport, reason}}
-    end
+        {:error, reason} ->
+          {:error, {:transport, reason}}
+      end
+    end)
   end
 
   @spec blocks() :: {:ok, list()} | {:error, term()}
@@ -78,12 +86,6 @@ defmodule BitcoinexExplorer.Esplora do
   """
   @spec recent_blocks(pos_integer()) :: {:ok, list()} | {:error, term()}
   def recent_blocks(limit \\ 100) when is_integer(limit) and limit > 0 do
-    BitcoinexExplorer.EsploraCache.get_or_fetch({:recent_blocks, limit}, fn ->
-      recent_blocks_uncached(limit)
-    end)
-  end
-
-  defp recent_blocks_uncached(limit) do
     case blocks() do
       {:ok, batch} when is_list(batch) and batch != [] ->
         fetch_more_recent_batches(batch, limit, 0)
@@ -175,16 +177,10 @@ defmodule BitcoinexExplorer.Esplora do
   end
 
   @spec mempool() :: {:ok, map()} | {:error, term()}
-  def mempool do
-    BitcoinexExplorer.EsploraCache.get_or_fetch(:mempool, fn -> get_json("/mempool") end)
-  end
+  def mempool, do: get_json("/mempool")
 
   @spec fee_estimates() :: {:ok, map()} | {:error, term()}
-  def fee_estimates do
-    BitcoinexExplorer.EsploraCache.get_or_fetch(:fee_estimates, fn ->
-      get_json("/fee-estimates")
-    end)
-  end
+  def fee_estimates, do: get_json("/fee-estimates")
 
   @spec mempool_recent() :: {:ok, list()} | {:error, term()}
   def mempool_recent, do: get_json("/mempool/recent")

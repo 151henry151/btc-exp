@@ -96,9 +96,22 @@ esplora_cache_ttl_ms =
       end
   end
 
+esplora_min_request_interval_ms =
+  case System.get_env("ESPLORA_MIN_REQUEST_INTERVAL_MS", "") |> String.trim() do
+    "" ->
+      if config_env() == :prod, do: 250, else: 0
+
+    s ->
+      case Integer.parse(s) do
+        {n, _} when n >= 0 -> n
+        _ -> 0
+      end
+  end
+
 config :bitcoinex_explorer,
   esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api"),
-  esplora_cache_ttl_ms: esplora_cache_ttl_ms
+  esplora_cache_ttl_ms: esplora_cache_ttl_ms,
+  esplora_min_request_interval_ms: esplora_min_request_interval_ms
 
 # Note: data_source_module / Fulcrum / Bitcoin RPC env vars are applied earlier in this file.
 
