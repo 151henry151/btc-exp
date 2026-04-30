@@ -1,12 +1,12 @@
 defmodule BitcoinexExplorer.OutputClassifier do
   @moduledoc """
   Maps Esplora vout data + optional Bitcoinex decode into chart buckets.
-  Chart keys: `p2pkh`, `p2sh`, `p2wpkh`, `p2wsh`, `p2tr`, `unknown`.
+  Chart keys: `p2pkh`, `p2sh`, `p2wpkh`, `p2wsh`, `p2tr`, `op_return`, `unknown`.
   """
 
   alias BitcoinexExplorer.Decode
 
-  @chart_keys ~w(p2pkh p2sh p2wpkh p2wsh p2tr unknown)a
+  @chart_keys ~w(p2pkh p2sh p2wpkh p2wsh p2tr op_return unknown)a
 
   def chart_keys, do: @chart_keys
 
@@ -37,6 +37,7 @@ defmodule BitcoinexExplorer.OutputClassifier do
       "v0_p2wpkh" -> :p2wpkh
       "v0_p2wsh" -> :p2wsh
       "v1_p2tr" -> :p2tr
+      "op_return" -> :op_return
       _ -> :unknown
     end
   end
@@ -75,6 +76,7 @@ defmodule BitcoinexExplorer.OutputClassifier do
       p2wpkh: "P2WPKH",
       p2wsh: "P2WSH",
       p2tr: "P2TR",
+      op_return: "OP_RETURN",
       unknown: "Unknown"
     }
 

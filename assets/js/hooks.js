@@ -8,6 +8,7 @@ const COLORS = {
   p2wsh: "#6366f1",
   p2tr: "#a855f7",
   coinbase: "#71717a",
+  op_return: "#9f1239",
   unknown: "#71717a",
 }
 
@@ -127,7 +128,7 @@ export const TxFlowGraph = {
     const pad = 16
     const colW = 140
     const midW = 72
-    const rowH = 36
+    const rowH = outputs.length >= 4 ? 46 : 36
     const hIn = Math.max(inputs.length * rowH + pad * 2, 120)
     const hOut = Math.max(outputs.length * rowH + pad * 2, 120)
     const height = Math.max(hIn, hOut, 160)
@@ -176,13 +177,18 @@ export const TxFlowGraph = {
       const label = truncateAddr(inp.address)
       const color = COLORS[inp.type] || COLORS.unknown
 
+      const inStroke =
+        inp.type === "coinbase"
+          ? Math.max(2, strokeFor(inp.value_sats || 0))
+          : strokeFor(inp.value_sats || 0)
+
       g.append("line")
         .attr("x1", pad)
         .attr("y1", y)
         .attr("x2", cx - 28)
         .attr("y2", cy)
         .attr("stroke", "#52525b")
-        .attr("stroke-width", strokeFor(inp.value_sats || 0))
+        .attr("stroke-width", inStroke)
 
       const ng = g.append("g").style("cursor", inp.address && inp.address !== "Coinbase" ? "pointer" : "default")
 
@@ -205,6 +211,8 @@ export const TxFlowGraph = {
       const y = pad + i * rowH + rowH / 2
       const label = truncateAddr(out.address)
       const color = COLORS[out.type] || COLORS.unknown
+      const outNavigable =
+        out.address && out.address !== "non-standard" && out.address !== "OP_RETURN"
 
       g.append("line")
         .attr("x1", cx + 28)
@@ -214,7 +222,7 @@ export const TxFlowGraph = {
         .attr("stroke", "#52525b")
         .attr("stroke-width", strokeFor(out.value_sats || 0))
 
-      const ng = g.append("g").style("cursor", "pointer")
+      const ng = g.append("g").style("cursor", outNavigable ? "pointer" : "default")
 
       ng.append("circle").attr("cx", width - pad - 8).attr("cy", y).attr("r", 8).attr("fill", color)
 
@@ -225,7 +233,7 @@ export const TxFlowGraph = {
         .attr("font-size", "11px")
         .attr("text-anchor", "end")
         .on("click", () => {
-          if (out.address && out.address !== "non-standard") {
+          if (outNavigable) {
             hook.pushEvent("goto_address", { address: out.address })
           }
         })

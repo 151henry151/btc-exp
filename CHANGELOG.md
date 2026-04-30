@@ -5,6 +5,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-04-30
+
+- Map Esplora **`scriptpubkey_type`** **`op_return`** to chart bucket **`op_return`** and **`OP_RETURN`** flow-node labels in **`OutputClassifier`** / **`TxFlow`**.
+- Add **`op_return`** stroke color and **`OP_RETURN`** click/no-navigation handling in **`TxFlowGraph`**; widen vertical spacing when there are four or more outputs; thicken coinbase→TX edges slightly.
+- Use **`unknown`** instead of **`non-standard`** for vin prevouts missing address and type in **`TxEnrichment`**.
+
 ## [0.4.7] - 2026-04-30
 
 - Remove Live blocks caption line and footer Esplora / Bitcoinex attribution from **`ExplorerLive`**.

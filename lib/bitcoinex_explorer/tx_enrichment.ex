@@ -101,7 +101,7 @@ defmodule BitcoinexExplorer.TxEnrichment do
           else
             %{
               "bx_network" => "",
-              "bx_address_type" => Map.get(prev, "scriptpubkey_type") || "non-standard",
+              "bx_address_type" => Map.get(prev, "scriptpubkey_type") || "unknown",
               "bx_witness_version" => "",
               "bx_witness_program_hex" => "",
               "bx_payload_hex" => ""

@@ -38,12 +38,16 @@ defmodule BitcoinexExplorer.TxFlow do
 
   defp output_nodes(tx) do
     Enum.map(Map.get(tx, "vout", []) || [], fn vout ->
-      addr = Map.get(vout, "scriptpubkey_address") || "non-standard"
-      val = Map.get(vout, "value") || 0
+      bucket = OutputClassifier.bucket_from_vout(vout)
 
-      type =
-        OutputClassifier.bucket_from_vout(vout)
-        |> Atom.to_string()
+      addr =
+        case bucket do
+          :op_return -> "OP_RETURN"
+          _ -> Map.get(vout, "scriptpubkey_address") || "non-standard"
+        end
+
+      val = Map.get(vout, "value") || 0
+      type = Atom.to_string(bucket)
 
       %{"address" => addr, "value_sats" => val, "type" => type}
     end)
