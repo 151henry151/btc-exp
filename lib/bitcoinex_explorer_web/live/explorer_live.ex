@@ -340,7 +340,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp esplora_err({:http_error, 429, _}),
     do:
-      "Esplora HTTP 429 (rate limited). Wait and retry, raise ESPLORA_CACHE_TTL_MS, point ESPLORA_BASE_URL at your own node, or use DATA_SOURCE=rpc."
+      "Live blockchain data is temporarily unavailable because an external data service has reached its usage limit. Please try again in a few minutes."
 
   defp esplora_err({:http_error, status, _}), do: "Esplora HTTP #{status}"
   defp esplora_err({:transport, reason}), do: "Network error: #{inspect(reason)}"
