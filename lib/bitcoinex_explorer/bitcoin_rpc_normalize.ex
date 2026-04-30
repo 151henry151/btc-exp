@@ -37,8 +37,11 @@ defmodule BitcoinexExplorer.BitcoinRpcNormalize do
 
   def btc_to_sats(btc) when is_binary(btc) do
     case Decimal.parse(btc) do
-      {d, _} -> d |> Decimal.mult(Decimal.new(100_000_000)) |> Decimal.round(0) |> Decimal.to_integer()
-      :error -> 0
+      {d, _} ->
+        d |> Decimal.mult(Decimal.new(100_000_000)) |> Decimal.round(0) |> Decimal.to_integer()
+
+      :error ->
+        0
     end
   end
 
@@ -130,7 +133,8 @@ defmodule BitcoinexExplorer.BitcoinRpcNormalize do
         status_from_core_decoded(decoded)
       end
 
-    weight = decoded["weight"] || max(div((decoded["vsize"] || decoded["size"] || 0) * 4 + 3, 4), 1)
+    weight =
+      decoded["weight"] || max(div((decoded["vsize"] || decoded["size"] || 0) * 4 + 3, 4), 1)
 
     %{
       "txid" => decoded["txid"],

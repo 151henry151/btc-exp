@@ -80,7 +80,11 @@ defmodule BitcoinexExplorer.OutputClassifier do
 
     @chart_keys
     |> Enum.map(fn key ->
-      %{"type" => Map.fetch!(labels, key), "key" => Atom.to_string(key), "count" => Map.get(counts, key, 0)}
+      %{
+        "type" => Map.fetch!(labels, key),
+        "key" => Atom.to_string(key),
+        "count" => Map.get(counts, key, 0)
+      }
     end)
     |> Enum.filter(fn %{"count" => c} -> c > 0 end)
   end

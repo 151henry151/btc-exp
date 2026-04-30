@@ -56,10 +56,10 @@ defmodule BitcoinexExplorer.FulcrumClient do
     port = Application.fetch_env!(:bitcoinex_explorer, :fulcrum_port)
 
     ssl_opts =
-      Application.get_env(:bitcoinex_explorer, :fulcrum_ssl_opts, [
+      Application.get_env(:bitcoinex_explorer, :fulcrum_ssl_opts,
         verify: :verify_none,
         server_name_indication: :disable
-      ])
+      )
 
     {:ok,
      %{
@@ -84,7 +84,10 @@ defmodule BitcoinexExplorer.FulcrumClient do
         {:noreply, %{state | socket: sock, transport: transport, backoff_ms: @initial_backoff_ms}}
 
       {:error, reason} ->
-        Logger.warning("FulcrumClient: connect failed #{inspect(reason)}, backing off #{state.backoff_ms}ms")
+        Logger.warning(
+          "FulcrumClient: connect failed #{inspect(reason)}, backing off #{state.backoff_ms}ms"
+        )
+
         schedule_reconnect(state.backoff_ms)
         next_backoff = min(state.backoff_ms * 2, @max_backoff_ms)
         {:noreply, %{state | backoff_ms: next_backoff}}

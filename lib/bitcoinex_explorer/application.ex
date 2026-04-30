@@ -11,7 +11,8 @@ defmodule BitcoinexExplorer.Application do
 
     base = [
       BitcoinexExplorerWeb.Telemetry,
-      {DNSCluster, query: Application.get_env(:bitcoinex_explorer, :dns_cluster_query) || :ignore},
+      {DNSCluster,
+       query: Application.get_env(:bitcoinex_explorer, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: BitcoinexExplorer.PubSub}
     ]
 

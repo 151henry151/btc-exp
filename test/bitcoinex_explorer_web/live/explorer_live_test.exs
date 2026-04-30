@@ -48,8 +48,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLiveTest do
   test "shows Bech32 checksum error for invalid bc1 address, not generic decode", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
-    bad =
-      "bc1p5d7rjq7j6alvr7ghs086p45987z9sh9u6m6v0v607v607v607v6qsru639"
+    bad = "bc1p5d7rjq7j6alvr7ghs086p45987z9sh9u6m6v0v607v607v607v6qsru639"
 
     html =
       view

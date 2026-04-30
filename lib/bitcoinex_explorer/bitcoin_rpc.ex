@@ -69,10 +69,16 @@ defmodule BitcoinexExplorer.BitcoinRPC do
   @impl true
   def get_block_hash_at_height(height) when is_integer(height) and height >= 0 do
     case BitcoinCoreRpc.call("getblockhash", [height]) do
-      {:ok, hash} when is_binary(hash) -> {:ok, String.downcase(hash)}
-      {:error, {:rpc_error, -8, _}} -> {:error, :not_found}
+      {:ok, hash} when is_binary(hash) ->
+        {:ok, String.downcase(hash)}
+
+      {:error, {:rpc_error, -8, _}} ->
+        {:error, :not_found}
+
       {:error, {:rpc_error, -1, msg}} ->
-        if String.contains?(msg, "out of range"), do: {:error, :not_found}, else: {:error, {:rpc_error, -1, msg}}
+        if String.contains?(msg, "out of range"),
+          do: {:error, :not_found},
+          else: {:error, {:rpc_error, -1, msg}}
 
       err ->
         err
@@ -80,7 +86,8 @@ defmodule BitcoinexExplorer.BitcoinRPC do
   end
 
   @impl true
-  def get_block_txs(hash, start_index) when is_binary(hash) and is_integer(start_index) and start_index >= 0 do
+  def get_block_txs(hash, start_index)
+      when is_binary(hash) and is_integer(start_index) and start_index >= 0 do
     h = String.downcase(hash)
 
     case BitcoinCoreRpc.call("getblock", [h, 2]) do

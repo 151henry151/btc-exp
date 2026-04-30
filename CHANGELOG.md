@@ -5,6 +5,10 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-04-30
+
+- Apply **`mix format`** across **`lib/`**, **`test/`**, and **`config/`** inputs from **`.formatter.exs`**.
+
 ## [0.4.4] - 2026-04-30
 
 - Space **`EsploraHttpGate`** by **request start** time (not response completion); raise prod default **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** to **300** ms.

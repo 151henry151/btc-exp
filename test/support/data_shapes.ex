@@ -46,6 +46,8 @@ defmodule BitcoinexExplorerTest.DataShapes do
   def assert_same_keys(a, b) when is_map(a) and is_map(b) do
     ka = a |> Map.keys() |> MapSet.new()
     kb = b |> Map.keys() |> MapSet.new()
-    assert ka == kb, "key mismatch: only a #{inspect(MapSet.difference(ka, kb))} only b #{inspect(MapSet.difference(kb, ka))}"
+
+    assert ka == kb,
+           "key mismatch: only a #{inspect(MapSet.difference(ka, kb))} only b #{inspect(MapSet.difference(kb, ka))}"
   end
 end

@@ -12,7 +12,7 @@ defmodule BitcoinexExplorer.BitcoinRpcNormalizeTest do
     raw = BitcoinexExplorerTest.Fixtures.read_json!("rpc/getmempoolinfo.json")
     m = BitcoinRpcNormalize.mempool_from_core(raw)
     assert m["count"] == 14208
-    assert m["vsize"] == 8837058
+    assert m["vsize"] == 8_837_058
     assert is_integer(m["total_fee"])
     assert m["total_fee"] == round(0.14283676 * 100_000_000)
   end

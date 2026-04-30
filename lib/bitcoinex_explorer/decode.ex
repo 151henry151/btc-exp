@@ -55,7 +55,9 @@ defmodule BitcoinexExplorer.Decode do
 
   defp looks_like_bech32_address?(value) when is_binary(value) do
     v = String.downcase(value)
-    String.starts_with?(v, "bc1") or String.starts_with?(v, "tb1") or String.starts_with?(v, "bcrt1")
+
+    String.starts_with?(v, "bc1") or String.starts_with?(v, "tb1") or
+      String.starts_with?(v, "bcrt1")
   end
 
   defp segwit_error_message(:invalid_checksum) do
@@ -137,8 +139,7 @@ defmodule BitcoinexExplorer.Decode do
            input_type: "PSBT",
            input_count: length(inputs),
            output_count: length(outputs),
-           unsigned_tx_id:
-             "Unsigned PSBTs don't have a valid txid until finalized",
+           unsigned_tx_id: "Unsigned PSBTs don't have a valid txid until finalized",
            input_derivations: format_input_derivations(psbt.inputs || []),
            output_amounts: format_output_amounts(outputs)
          }}
@@ -188,7 +189,8 @@ defmodule BitcoinexExplorer.Decode do
   defp segwit_type(1, _), do: "p2tr"
   defp segwit_type(version, _), do: "segwit_v#{version}"
 
-  defp witness_program_hex(program), do: program |> :binary.list_to_bin() |> Base.encode16(case: :lower)
+  defp witness_program_hex(program),
+    do: program |> :binary.list_to_bin() |> Base.encode16(case: :lower)
 
   defp legacy_prefix_info(0x00), do: {"mainnet", "p2pkh (legacy address detected)"}
   defp legacy_prefix_info(0x05), do: {"mainnet", "p2sh (legacy address detected)"}
