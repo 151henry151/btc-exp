@@ -22,7 +22,8 @@ config :bitcoinex_explorer,
     verify: :verify_none,
     server_name_indication: :disable
   ],
-  fulcrum_request_timeout: 15_000
+  fulcrum_request_timeout: 15_000,
+  esplora_cache_ttl_ms: 0
 
 # Configures the endpoint
 config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint,

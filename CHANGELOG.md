@@ -5,6 +5,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-30
+
+- Add **`BitcoinexExplorer.EsploraCache`** (ETS, configurable **`ESPLORA_CACHE_TTL_MS`**, prod default **45s**) for **`recent_blocks`**, **`mempool`**, and **`fee-estimates`** Esplora calls.
+- Reduce home **`recent_blocks`** request size to **25**; slow LiveView polls (**60s** blocks, **120s** mempool).
+- Improve LiveView copy for **HTTP 429** and dashboard block caption; document caching and rate limits in **`README.md`** and **`.env.production.example`**.
+
 ## [0.4.0] - 2026-04-30
 
 - Add **`BitcoinexExplorer.DataSource`** behaviour; refactor **`ExplorerLive`** and **`BlockHeightController`** to **`DataSource.impl()`**.

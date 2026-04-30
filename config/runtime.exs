@@ -39,7 +39,11 @@ fulcrum_ssl =
   |> Kernel.in(~w(1 true yes))
 
 if data_source_module == BitcoinexExplorer.BitcoinRPC and config_env() == :prod do
-  for {var, val} <- [{"BITCOIN_RPC_URL", rpc_url}, {"BITCOIN_RPC_USER", rpc_user}, {"BITCOIN_RPC_PASS", rpc_pass}] do
+  for {var, val} <- [
+        {"BITCOIN_RPC_URL", rpc_url},
+        {"BITCOIN_RPC_USER", rpc_user},
+        {"BITCOIN_RPC_PASS", rpc_pass}
+      ] do
     if val == nil or String.trim(to_string(val)) == "" do
       raise ArgumentError, "#{var} is required when DATA_SOURCE=rpc"
     end
@@ -80,8 +84,21 @@ if System.get_env("PHX_SERVER") do
   config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint, server: true
 end
 
+esplora_cache_ttl_ms =
+  case System.get_env("ESPLORA_CACHE_TTL_MS", "") |> String.trim() do
+    "" ->
+      if config_env() == :prod, do: 45_000, else: 0
+
+    s ->
+      case Integer.parse(s) do
+        {n, _} when n >= 0 -> n
+        _ -> 0
+      end
+  end
+
 config :bitcoinex_explorer,
-  esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api")
+  esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api"),
+  esplora_cache_ttl_ms: esplora_cache_ttl_ms
 
 # Note: data_source_module / Fulcrum / Bitcoin RPC env vars are applied earlier in this file.
 

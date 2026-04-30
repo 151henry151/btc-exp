@@ -57,6 +57,26 @@ defmodule BitcoinexExplorer.EsploraTest do
     assert List.last(twelve)["height"] == 9
   end
 
+  test "mempool uses dashboard cache when ttl > 0", %{bypass: bypass} do
+    prev_ttl = Application.get_env(:bitcoinex_explorer, :esplora_cache_ttl_ms)
+    BitcoinexExplorer.EsploraCache.flush()
+    Application.put_env(:bitcoinex_explorer, :esplora_cache_ttl_ms, 60_000)
+
+    on_exit(fn ->
+      Application.put_env(:bitcoinex_explorer, :esplora_cache_ttl_ms, prev_ttl)
+      BitcoinexExplorer.EsploraCache.flush()
+    end)
+
+    Bypass.expect(bypass, "GET", "/mempool", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(200, Jason.encode!(%{"count" => 42}))
+    end)
+
+    assert {:ok, %{"count" => 42}} = BitcoinexExplorer.Esplora.mempool()
+    assert {:ok, %{"count" => 42}} = BitcoinexExplorer.Esplora.mempool()
+  end
+
   test "404 maps to not_found", %{bypass: bypass} do
     Bypass.expect(bypass, "GET", "/tx/nope", fn conn ->
       Plug.Conn.resp(conn, 404, "")

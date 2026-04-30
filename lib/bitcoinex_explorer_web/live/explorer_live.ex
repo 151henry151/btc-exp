@@ -14,8 +14,12 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp ds, do: DataSource.impl()
 
-  @poll_blocks_ms 15_000
-  @poll_mempool_ms 30_000
+  # Public Esplora endpoints rate-limit aggressively; keep home polls sparse and
+  # use a modest block count (each ~10 blocks may cost one extra HTTP round-trip).
+  @home_recent_blocks_limit 25
+
+  @poll_blocks_ms 60_000
+  @poll_mempool_ms 120_000
 
   @impl true
   def mount(_params, _session, socket) do
@@ -33,6 +37,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       |> assign(:fee_estimates, nil)
       |> assign(:mempool_error, nil)
       |> assign(:blocks_error, nil)
+      |> assign(:home_recent_blocks_limit, @home_recent_blocks_limit)
       # block
       |> assign(:block_data, nil)
       |> assign(:block_txs, [])
@@ -145,7 +150,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp fetch_home_data(socket) do
     socket =
-      case ds().get_recent_blocks(100) do
+      case ds().get_recent_blocks(@home_recent_blocks_limit) do
         {:ok, list} when is_list(list) ->
           tip =
             case list do
@@ -235,12 +240,11 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         txs = txs || []
         next = length(txs) == 25
 
-        merged =
-          if start_index == 0, do: txs, else: socket.assigns.block_txs ++ txs
+        merged = if start_index == 0, do: txs, else: socket.assigns.block_txs ++ txs
 
         counts =
           merged
-          |> Enum.flat_map(&Map.get(&1, "vout", []) || [])
+          |> Enum.flat_map(&(Map.get(&1, "vout", []) || []))
           |> OutputClassifier.counts_from_vouts()
 
         chart =
@@ -333,6 +337,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         assign(socket, :addr_error, esplora_err(reason))
     end
   end
+
+  defp esplora_err({:http_error, 429, _}),
+    do:
+      "Esplora HTTP 429 (rate limited). Wait and retry, raise ESPLORA_CACHE_TTL_MS, point ESPLORA_BASE_URL at your own node, or use DATA_SOURCE=rpc."
 
   defp esplora_err({:http_error, status, _}), do: "Esplora HTTP #{status}"
   defp esplora_err({:transport, reason}), do: "Network error: #{inspect(reason)}"
@@ -487,7 +495,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       if socket.assigns.live_action != :home do
         socket
       else
-        case ds().get_recent_blocks(100) do
+        case ds().get_recent_blocks(@home_recent_blocks_limit) do
           {:ok, list} when is_list(list) ->
             tip =
               case list do
@@ -544,7 +552,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       <.nav_bar {assigns} />
 
       <main class="mx-auto w-full max-w-6xl px-4 py-6 md:px-6">
-        <p :if={assigns[:page_error]} class="mb-4 rounded border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300">
+        <p
+          :if={assigns[:page_error]}
+          class="mb-4 rounded border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-300"
+        >
           <%= @page_error %>
         </p>
 
@@ -562,7 +573,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
       <footer class="mx-auto mt-10 max-w-6xl px-4 pb-8 text-center text-xs text-zinc-500">
         <nav class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
-          <.link href="https://hromp.com/" class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline">
+          <.link
+            href="https://hromp.com/"
+            class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline"
+          >
             hromp.com
           </.link>
           <span class="text-zinc-600">·</span>
@@ -599,7 +613,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           Bitcoinex Explorer
         </.link>
 
-        <form phx-submit="search" class="mx-auto flex min-w-[200px] flex-1 items-center gap-2 md:max-w-xl">
+        <form
+          phx-submit="search"
+          class="mx-auto flex min-w-[200px] flex-1 items-center gap-2 md:max-w-xl"
+        >
           <input
             type="text"
             name="q"
@@ -669,7 +686,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           Live blocks
         </h2>
         <p class="mb-2 text-xs text-zinc-500">
-          <%= length(@blocks) %> recent blocks (tip downward). Scroll the table for more — up to ~100 loaded from Esplora.
+          <%= length(@blocks) %> recent blocks (tip downward). Scroll the table for more — up to ~<%= @home_recent_blocks_limit %> loaded from the indexer.
         </p>
         <p :if={@blocks_error} class="mb-2 text-sm text-orange-300"><%= @blocks_error %></p>
         <div class="overflow-x-auto rounded-lg border border-zinc-800">
@@ -733,7 +750,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           ><%= @input %></textarea>
         </form>
 
-        <p :if={@error} class="mt-3 rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300">
+        <p
+          :if={@error}
+          class="mt-3 rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
+        >
           <%= @error %>
         </p>
 
@@ -742,7 +762,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             <%= for {key, value} <- Decode.rows_for_result(@result) do %>
               <div class="grid grid-cols-1 gap-1 p-3 md:grid-cols-[220px_1fr] md:gap-4">
                 <dt class="text-xs uppercase tracking-wide text-zinc-400"><%= key %></dt>
-                <dd class="break-all whitespace-pre-wrap font-mono text-sm text-zinc-100"><%= value %></dd>
+                <dd class="break-all whitespace-pre-wrap font-mono text-sm text-zinc-100">
+                  <%= value %>
+                </dd>
               </div>
             <% end %>
           </dl>
@@ -755,7 +777,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp block_view(assigns) do
     ~H"""
     <div class="space-y-6">
-      <p :if={@block_error} class="rounded border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300">
+      <p
+        :if={@block_error}
+        class="rounded border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
+      >
         <%= @block_error %>
       </p>
 
@@ -769,9 +794,19 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             <.meta_row label="Transactions" value={to_string(b["tx_count"])} mono={false} link={nil} />
             <.meta_row label="Size" value={"#{b["size"]} bytes"} mono={false} link={nil} />
             <.meta_row label="Weight" value={to_string(b["weight"])} mono={false} link={nil} />
-            <.meta_row label="Difficulty" value={format_float(b["difficulty"])} mono={false} link={nil} />
+            <.meta_row
+              label="Difficulty"
+              value={format_float(b["difficulty"])}
+              mono={false}
+              link={nil}
+            />
             <.meta_row label="Merkle root" value={b["merkle_root"]} mono={true} link={nil} />
-            <.meta_row label="Previous block" value={b["previousblockhash"]} mono={true} link={~p"/block/#{b["previousblockhash"]}"} />
+            <.meta_row
+              label="Previous block"
+              value={b["previousblockhash"]}
+              mono={true}
+              link={~p"/block/#{b["previousblockhash"]}"}
+            />
             <.meta_row label="Miner (coinbase hint)" value={@block_miner} mono={false} link={nil} />
           </dl>
         </section>
@@ -804,7 +839,11 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                 <%= for tx <- @block_txs do %>
                   <tr class="border-t border-zinc-800">
                     <td class="py-2">
-                      <.link navigate={~p"/tx/#{tx["txid"]}"} class="text-[#f7931a]" title={tx["txid"]}>
+                      <.link
+                        navigate={~p"/tx/#{tx["txid"]}"}
+                        class="text-[#f7931a]"
+                        title={tx["txid"]}
+                      >
                         <%= truncate_middle(tx["txid"], 14) %>
                       </.link>
                     </td>
@@ -839,7 +878,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       <dt class="text-xs uppercase text-zinc-500"><%= @label %></dt>
       <dd class="mt-1 font-mono text-sm break-all text-zinc-200">
         <%= if @link do %>
-          <.link navigate={@link} class="text-[#f7931a] hover:underline" title={@value}><%= @value %></.link>
+          <.link navigate={@link} class="text-[#f7931a] hover:underline" title={@value}>
+            <%= @value %>
+          </.link>
         <% else %>
           <span title={@value}><%= @value %></span>
         <% end %>
@@ -851,7 +892,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp tx_view(assigns) do
     ~H"""
     <div class="space-y-6">
-      <p :if={@tx_error} class="rounded border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300">
+      <p
+        :if={@tx_error}
+        class="rounded border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
+      >
         <%= @tx_error %>
       </p>
 
@@ -864,7 +908,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-6">
           <h1 class="mb-4 text-2xl font-semibold text-[#f7931a]">Transaction</h1>
-          <p class="mb-4 break-all font-mono text-sm text-zinc-300" title={t["txid"]}><%= t["txid"] %></p>
+          <p class="mb-4 break-all font-mono text-sm text-zinc-300" title={t["txid"]}>
+            <%= t["txid"] %>
+          </p>
           <dl class="grid gap-3 text-sm md:grid-cols-2">
             <.meta_row label="Status" value={conf} mono={false} link={nil} />
             <.meta_row
@@ -875,8 +921,18 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             />
             <.meta_row label="Fee" value={"#{Map.get(t, "fee", 0)} sat"} mono={false} link={nil} />
             <.meta_row label="Fee rate" value={"#{fr} sat/vB"} mono={false} link={nil} />
-            <.meta_row label="Size / weight" value={"#{t["size"]} / #{t["weight"]}"} mono={false} link={nil} />
-            <.meta_row label="Locktime" value={to_string(Map.get(t, "locktime", 0))} mono={false} link={nil} />
+            <.meta_row
+              label="Size / weight"
+              value={"#{t["size"]} / #{t["weight"]}"}
+              mono={false}
+              link={nil}
+            />
+            <.meta_row
+              label="Locktime"
+              value={to_string(Map.get(t, "locktime", 0))}
+              mono={false}
+              link={nil}
+            />
           </dl>
         </section>
 
@@ -927,7 +983,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                     <td class="py-2"><%= row["bx_network"] %></td>
                     <td class="py-2"><%= row["bx_address_type"] %></td>
                     <td class="py-2"><%= row["bx_witness_version"] %></td>
-                    <td class="py-2 break-all"><%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %></td>
+                    <td class="py-2 break-all">
+                      <%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %>
+                    </td>
                   </tr>
                 <% end %>
               </tbody>
@@ -967,7 +1025,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                     <td class="py-2"><%= row["bx_network"] %></td>
                     <td class="py-2"><%= row["bx_address_type"] %></td>
                     <td class="py-2"><%= row["bx_witness_version"] %></td>
-                    <td class="py-2 break-all"><%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %></td>
+                    <td class="py-2 break-all">
+                      <%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %>
+                    </td>
                   </tr>
                 <% end %>
               </tbody>
@@ -982,7 +1042,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp address_view(assigns) do
     ~H"""
     <div class="space-y-6">
-      <p :if={@addr_error} class="rounded border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300">
+      <p
+        :if={@addr_error}
+        class="rounded border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
+      >
         <%= @addr_error %>
       </p>
 
@@ -997,9 +1060,24 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               <%= if @addr_decode do %>
                 <dl class="mt-2 grid gap-2 text-sm md:grid-cols-2">
                   <.meta_row label="Network" value={@addr_decode.network} mono={false} link={nil} />
-                  <.meta_row label="Address type" value={@addr_decode.address_type} mono={false} link={nil} />
-                  <.meta_row label="Witness version" value={to_string(@addr_decode.witness_version)} mono={false} link={nil} />
-                  <.meta_row label="Witness program" value={@addr_decode.witness_program_hex} mono={true} link={nil} />
+                  <.meta_row
+                    label="Address type"
+                    value={@addr_decode.address_type}
+                    mono={false}
+                    link={nil}
+                  />
+                  <.meta_row
+                    label="Witness version"
+                    value={to_string(@addr_decode.witness_version)}
+                    mono={false}
+                    link={nil}
+                  />
+                  <.meta_row
+                    label="Witness program"
+                    value={@addr_decode.witness_program_hex}
+                    mono={true}
+                    link={nil}
+                  />
                 </dl>
               <% end %>
             </div>
@@ -1013,11 +1091,31 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           </div>
 
           <dl class="mt-6 grid gap-3 border-t border-zinc-800 pt-4 text-sm md:grid-cols-2">
-            <.meta_row label="Confirmed balance (sat)" value={balance_sat(cs)} mono={false} link={nil} />
+            <.meta_row
+              label="Confirmed balance (sat)"
+              value={balance_sat(cs)}
+              mono={false}
+              link={nil}
+            />
             <.meta_row label="Unconfirmed (sat)" value={balance_sat(ms)} mono={false} link={nil} />
-            <.meta_row label="Total received (sat)" value={to_string(Map.get(cs, "funded_txo_sum", 0))} mono={false} link={nil} />
-            <.meta_row label="Total sent (sat)" value={to_string(Map.get(cs, "spent_txo_sum", 0))} mono={false} link={nil} />
-            <.meta_row label="Tx count" value={to_string(Map.get(cs, "tx_count", 0))} mono={false} link={nil} />
+            <.meta_row
+              label="Total received (sat)"
+              value={to_string(Map.get(cs, "funded_txo_sum", 0))}
+              mono={false}
+              link={nil}
+            />
+            <.meta_row
+              label="Total sent (sat)"
+              value={to_string(Map.get(cs, "spent_txo_sum", 0))}
+              mono={false}
+              link={nil}
+            />
+            <.meta_row
+              label="Tx count"
+              value={to_string(Map.get(cs, "tx_count", 0))}
+              mono={false}
+              link={nil}
+            />
           </dl>
         </section>
 
@@ -1039,13 +1137,20 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                   <% net = address_net(tx, @addr_string) %>
                   <tr class="border-t border-zinc-800">
                     <td class="py-2">
-                      <.link navigate={~p"/tx/#{tx["txid"]}"} class="text-[#f7931a]" title={tx["txid"]}>
+                      <.link
+                        navigate={~p"/tx/#{tx["txid"]}"}
+                        class="text-[#f7931a]"
+                        title={tx["txid"]}
+                      >
                         <%= truncate_middle(tx["txid"], 14) %>
                       </.link>
                     </td>
                     <td class="py-2">
                       <%= if st["block_height"] do %>
-                        <.link navigate={~p"/block/#{st["block_hash"]}"} class="text-zinc-300 hover:underline">
+                        <.link
+                          navigate={~p"/block/#{st["block_hash"]}"}
+                          class="text-zinc-300 hover:underline"
+                        >
                           <%= st["block_height"] %>
                         </.link>
                       <% else %>
@@ -1055,7 +1160,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                     <td class={"py-2 #{if net >= 0, do: "text-emerald-400", else: "text-red-400"}"}>
                       <%= net %>
                     </td>
-                    <td class="py-2"><%= if(st["confirmed"], do: "confirmed", else: "unconfirmed") %></td>
+                    <td class="py-2">
+                      <%= if(st["confirmed"], do: "confirmed", else: "unconfirmed") %>
+                    </td>
                   </tr>
                 <% end %>
               </tbody>
