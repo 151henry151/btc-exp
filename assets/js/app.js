@@ -21,6 +21,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
+import Hooks from "./hooks"
 
 // When the app is served under a path prefix (e.g. nginx /btcexp/ → Phoenix),
 // the LiveView socket is at /prefix/live, not /live. Default Phoenix assets use "/live"
@@ -32,7 +33,8 @@ const liveSocketPath = pathPrefix === "" ? "/live" : `${pathPrefix}/live`
 let csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 let liveSocket = new LiveSocket(liveSocketPath, Socket, {
   longPollFallbackMs: 2500,
-  params: {_csrf_token: csrfToken}
+  params: {_csrf_token: csrfToken},
+  hooks: Hooks
 })
 
 // Show progress bar on live navigation and form submits

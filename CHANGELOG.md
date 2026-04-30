@@ -5,6 +5,15 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-30
+
+- Add **`BitcoinexExplorer.Esplora`** (Tesla + Hackney) for Esplora-compatible REST calls with **`ESPLORA_BASE_URL`** (**`config/runtime.exs`**).
+- Expand **`BitcoinexExplorerWeb.Router`** with **`live_session`** routes: home, **`/block/:hash`**, **`/tx/:txid`**, **`/address/:address`**; **`BlockHeightController`** redirects **`/block/height/:height`** to block hash.
+- Extend **`ExplorerLive`** with **`handle_params`**, universal nav search (**`BitcoinexExplorer.Search`**), home live block feed + mempool + fee polls, block/tx/address chain views, Bitcoinex enrichment (**`TxEnrichment`**), script-type counts (**`OutputClassifier`**), flow JSON (**`TxFlow`**).
+- Add client hooks (**`d3`**, **`qrcode`**): **`ScriptTypeChart`**, **`TxFlowGraph`**, **`RelativeTime`**, **`AddressQr`** (**`assets/js/hooks.js`**).
+- Extract local decode logic to **`BitcoinexExplorer.Decode`**; keep paste-box decode behaviour.
+- Add ExUnit tests for **`Esplora`** (Bypass) and **`Search`**; add Playwright **`routes.spec.ts`**.
+
 ## [0.2.8] - 2026-04-30
 
 - Tighten **`README.md`** test and limitation wording (forward-looking copy); remove optional screenshot note.

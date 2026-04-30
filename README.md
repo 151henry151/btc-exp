@@ -1,6 +1,6 @@
 # Bitcoinex Explorer
 
-Bitcoin address, **BOLT11** Lightning invoice, and **PSBT** inspector — single paste box with automatic format detection. Built with **[River Financial’s Bitcoinex](https://github.com/RiverFinancial/bitcoinex)** on **Elixir / Phoenix LiveView**.
+**Bitcoin block explorer** plus a **Bitcoinex**-powered inspector: live blocks/mempool/fee estimates from an Esplora-compatible API, deep-linked **block / transaction / address** pages, D3 visualizations, and the original **single-field** decode for addresses, **BOLT11** invoices, and **PSBT** payloads. Built with **[River Financial’s Bitcoinex](https://github.com/RiverFinancial/bitcoinex)** on **Elixir / Phoenix LiveView**.
 
 | Resource | URL |
 |----------|-----|
@@ -14,13 +14,23 @@ Licensed under the **MIT License** — see [`LICENSE`](LICENSE).
 
 ## What it does
 
-You paste **one** payload into the UI. The app picks a decoder without tabs or modes:
+### Chain explorer (Esplora API)
 
-1. **Lightning (BOLT11)** — if the trimmed input matches `ln…` (length ≥ 6).
-2. **PSBT** — if whitespace is stripped and the base64 string begins with the PSBT magic (`cHNid…` when base64-encoded).
-3. **Bitcoin address** — otherwise: **SegWit** (`bc1…`, `tb1…`, `bcrt1…`) via Bech32/Bech32m, then **legacy Base58** (`1…`, `3…`, etc.).
+- **Home** — Recent blocks (poll), mempool stats (poll), fee estimates; universal **search** bar (txid / block hash / height / address / invoice / PSBT).
+- **`/block/:hash`** — Header metadata, paginated txs, **script-type distribution** chart (Bitcoinex-classified outputs).
+- **`/tx/:txid`** — Fees, confirmations, **flow diagram** (D3), input/output tables with **Bitcoinex enrichment** (network, type, witness program, payload).
+- **`/address/:address`** — Balance and history from Esplora; **QR** code hook; Bitcoinex decode summary at top.
+- **`/block/height/:height`** — Redirects to **`/block/:hash`** via **`BlockHeightController`**.
 
-Decoded output includes an **Input type** row (Bitcoin address / Lightning invoice / PSBT) plus fields from Bitcoinex (`Segwit`, `Base58`, `LightningNetwork.Invoice`, `PSBT`).
+### Local decode (Bitcoinex only)
+
+On the home page, **Decode locally** keeps the original behaviour: one debounced textarea; **no** chain lookup.
+
+1. **Lightning (BOLT11)** — trimmed input matches `ln…` (length ≥ 6).
+2. **PSBT** — whitespace stripped; base64 begins with PSBT magic (`cHNid…`).
+3. **Bitcoin address** — **SegWit** then **legacy Base58**.
+
+Universal **search** uses **`BitcoinexExplorer.Search`**: **64-char hex** tries **tx** then **block**; numeric string → **height redirect**; valid address → **address page**; otherwise falls through to the same local decode path.
 
 ---
 
@@ -28,13 +38,15 @@ Decoded output includes an **Input type** row (Bitcoin address / Lightning invoi
 
 | Layer | Details |
 |-------|---------|
-| **HTTP / WebSocket** | [**Bandit**](https://hex.pm/packages/bandit) serves Phoenix. [**LiveView**](https://hexdocs.pm/phoenix_live_view/) keeps state in **`BitcoinexExplorerWeb.ExplorerLive`**; the root route **`/`** is the only browser scope (`router.ex`). |
-| **UI** | One [`phx-change`](https://hexdocs.pm/phoenix_live_view/form-bindings.html) form with a debounced textarea (`phx-debounce="300"`). Results render as a definition list; errors as inline alerts. |
-| **Decoding** | All logic lives in **`ExplorerLive`**: `decode_auto/1` delegates to **`Bitcoinex.Segwit`**, **`Bitcoinex.Base58`**, **`Bitcoinex.LightningNetwork.Invoice`**, and **`Bitcoinex.PSBT`** — no separate API microservice. |
-| **Assets** | Tailwind + esbuild (`assets/`); production builds digest into **`priv/static/`** via **`mix assets.deploy`**. |
-| **Root layout** | Explorer uses **`live_view_root_only`** (no nested app layout) so LiveView does not double-wrap `<html>` (`bitcoinex_explorer_web.ex`). |
+| **HTTP / WebSocket** | [**Bandit**](https://hex.pm/packages/bandit) serves Phoenix. [**LiveView**](https://hexdocs.pm/phoenix_live_view/) **`ExplorerLive`** uses **`handle_params/3`** for **`live_session`** routes (`router.ex`). |
+| **Chain data** | **`BitcoinexExplorer.Esplora`** (**Tesla** + **Hackney**) calls **`ESPLORA_BASE_URL`** (default Blockstream public API). Timeouts **5s**; **no** cache. |
+| **Routing / search** | **`BitcoinexExplorer.Search`** classifies nav input; **`push_patch`** / **`redirect`** keep URLs shareable. |
+| **Bitcoinex** | **`BitcoinexExplorer.Decode`** (local decode); **`TxEnrichment`**, **`OutputClassifier`**, **`TxFlow`** combine Esplora JSON with Segwit/Base58 decoders. |
+| **UI** | Tailwind; **D3** stacked bar + tx flow (**`assets/js/hooks.js`**); **qrcode** for address QR; relative time hook. |
+| **Assets** | Tailwind + esbuild (**`npm`** deps under **`assets/`**); **`mix assets.deploy`** → **`priv/static/`**. |
+| **Root layout** | **`live_view_root_only`** — no nested app layout (`bitcoinex_explorer_web.ex`). |
 
-Production can mount the app under a **URL path prefix** (e.g. `/btcexp`): set **`PHX_PATH`** so URLs, static assets, and the LiveView socket match nginx — see **`config/runtime.exs`** and **`.env.production.example`**.
+Production can mount under a **path prefix** (e.g. **`/btcexp`**): set **`PHX_PATH`**, **`PHX_HOST`**, and optional **`ESPLORA_BASE_URL`** — **`config/runtime.exs`**, **`.env.production.example`**.
 
 ---
 
@@ -49,6 +61,8 @@ Production can mount the app under a **URL path prefix** (e.g. `/btcexp`): set *
 | Bitcoinex (Hex) | `~> 0.1.8` (resolved e.g. **0.1.8** in `mix.lock`) |
 | Decimal | Fixed-point display for Lightning BTC amounts (no float/scientific notation in the UI) |
 | Tailwind / esbuild | Asset pipeline for CSS/JS |
+| Tesla + Hackney | Esplora HTTP client |
+| d3 / qrcode (npm) | LiveView hooks for charts, flow, QR |
 
 ---
 
@@ -63,6 +77,7 @@ Typical layout on **[https://hromp.com/btcexp/](https://hromp.com/btcexp/)**:
 Environment highlights (**`.env.production.example`**):
 
 - **`PORT`** (e.g. **40174**), **`PHX_HOST`**, **`PHX_PATH=btcexp`** (must match the URL prefix the proxy strips/forwards), **`PHX_SERVER=true`**, **`MIX_ENV=prod`**.
+- Optional **`ESPLORA_BASE_URL`** (defaults to **`https://blockstream.info/api`**).
 
 ---
 
@@ -70,6 +85,7 @@ Environment highlights (**`.env.production.example`**):
 
 ```sh
 mix deps.get
+(cd assets && npm install)   # required once for D3 / QR hooks
 mix phx.server
 ```
 
@@ -80,6 +96,9 @@ Open **`http://127.0.0.1:4000/`** — no path prefix unless you set **`PHX_PATH`
 ## Tests
 
 ### ExUnit (`mix test`)
+
+- **`test/bitcoinex_explorer/esplora_test.exs`** — **`BitcoinexExplorer.Esplora`** with [**Bypass**](https://hex.pm/packages/bypass) (no real HTTP).
+- **`test/bitcoinex_explorer/search_test.exs`** — **`BitcoinexExplorer.Search`** routing classifications.
 
 Integration tests in **`test/bitcoinex_explorer_web/live/explorer_live_test.exs`** exercise **`ExplorerLive`** without a browser:
 
@@ -102,6 +121,7 @@ Headless Chromium drives the real LiveView page (fixtures in **`e2e/fixtures/vec
 | **`invoice.spec.ts`** | Valid BOLT11 fixtures and **error** rows | Same for Lightning invoices without manually repeating every ExUnit assertion in a browser. |
 | **`psbt.spec.ts`** | One minimal valid PSBT (checks **Inputs**/**Outputs** counts) plus **PSBT_ERRORS** | Validates PSBT magic detection and structured output; errors stay visible to users. |
 | **`edge-cases.spec.ts`** | Whitespace trim; uppercase Bech32; clearing input resets UI; empty input clears errors; malformed `bc1`-prefixed input surfaces SegWit decode errors | Catches UX issues unit tests might miss (DOM lifecycle, trimming, cross-type clears). |
+| **`routes.spec.ts`** | Home “Live blocks”; classic coinbase **tx** route renders | Smoke-checks deep-linked explorer routes on the path-mounted app. |
 
 ```sh
 cd e2e

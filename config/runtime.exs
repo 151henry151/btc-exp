@@ -20,6 +20,9 @@ if System.get_env("PHX_SERVER") do
   config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint, server: true
 end
 
+config :bitcoinex_explorer,
+  esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api")
+
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.
   # A default value is used in config/dev.exs and config/test.exs but you

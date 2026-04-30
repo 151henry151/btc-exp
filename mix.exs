@@ -4,7 +4,7 @@ defmodule BitcoinexExplorer.MixProject do
   def project do
     [
       app: :bitcoinex_explorer,
-      version: "0.1.0",
+      version: "0.3.0",
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -53,7 +53,10 @@ defmodule BitcoinexExplorer.MixProject do
       {:decimal, "~> 2.0"},
       {:dns_cluster, "~> 0.1.1"},
       {:bandit, "~> 1.5"},
-      {:bitcoinex, "~> 0.1.8"}
+      {:bitcoinex, "~> 0.1.8"},
+      {:tesla, "~> 1.10"},
+      {:hackney, "~> 1.20"},
+      {:bypass, "~> 2.1", only: :test}
     ]
   end
 

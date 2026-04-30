@@ -8,7 +8,8 @@
 import Config
 
 config :bitcoinex_explorer,
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  esplora_base_url: "https://blockstream.info/api"
 
 # Configures the endpoint
 config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint,

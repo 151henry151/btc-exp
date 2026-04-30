@@ -17,7 +17,15 @@ defmodule BitcoinexExplorerWeb.Router do
   scope "/", BitcoinexExplorerWeb do
     pipe_through :browser
 
-    live "/", ExplorerLive
+    get "/block/height/:height", BlockHeightController, :redirect_to_block
+
+    live_session :explorer,
+      on_mount: [] do
+      live "/", ExplorerLive, :home
+      live "/block/:hash", ExplorerLive, :block
+      live "/tx/:txid", ExplorerLive, :tx
+      live "/address/:address", ExplorerLive, :address
+    end
   end
 
   # Other scopes may use custom stacks.
