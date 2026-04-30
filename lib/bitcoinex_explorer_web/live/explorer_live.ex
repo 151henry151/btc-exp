@@ -14,12 +14,8 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp ds, do: DataSource.impl()
 
-  # Public Esplora endpoints rate-limit aggressively; keep home polls sparse and
-  # use a modest block count (each ~10 blocks may cost one extra HTTP round-trip).
-  @home_recent_blocks_limit 25
-
-  @poll_blocks_ms 60_000
-  @poll_mempool_ms 120_000
+  @poll_blocks_ms 15_000
+  @poll_mempool_ms 30_000
 
   @impl true
   def mount(_params, _session, socket) do
@@ -37,7 +33,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       |> assign(:fee_estimates, nil)
       |> assign(:mempool_error, nil)
       |> assign(:blocks_error, nil)
-      |> assign(:home_recent_blocks_limit, @home_recent_blocks_limit)
       # block
       |> assign(:block_data, nil)
       |> assign(:block_txs, [])
@@ -95,7 +90,15 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       try do
         case socket.assigns.live_action do
           :home ->
-            socket |> fetch_home_data()
+            # Chain dashboard calls are sequential (not concurrent): recent blocks
+            # (multiple paginated GETs) → fee estimates → mempool. Esplora limits by
+            # request arrivals; avoid loading on the disconnected render so we do not
+            # duplicate the full burst when the LiveView connects.
+            if connected?(socket) do
+              fetch_home_data(socket)
+            else
+              socket
+            end
 
           :block ->
             socket |> load_block(Map.get(params, "hash"))
@@ -122,8 +125,8 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         !socket.assigns[:poll_booted] ->
           socket
           |> assign(:poll_booted, true)
-          |> tap(fn _ -> Process.send_after(self(), :poll_blocks, 100) end)
-          |> tap(fn _ -> Process.send_after(self(), :poll_mempool, 100) end)
+          |> tap(fn _ -> Process.send_after(self(), :poll_blocks, @poll_blocks_ms) end)
+          |> tap(fn _ -> Process.send_after(self(), :poll_mempool, @poll_mempool_ms) end)
 
         true ->
           socket
@@ -150,7 +153,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp fetch_home_data(socket) do
     socket =
-      case ds().get_recent_blocks(@home_recent_blocks_limit) do
+      case ds().get_recent_blocks(100) do
         {:ok, list} when is_list(list) ->
           tip =
             case list do
@@ -338,10 +341,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
     end
   end
 
-  defp esplora_err({:http_error, 429, _}),
-    do:
-      "Live blockchain data is temporarily unavailable because an external data service has reached its usage limit. Please try again in a few minutes."
-
   defp esplora_err({:http_error, status, _}), do: "Esplora HTTP #{status}"
   defp esplora_err({:transport, reason}), do: "Network error: #{inspect(reason)}"
   defp esplora_err(other), do: inspect(other)
@@ -495,7 +494,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       if socket.assigns.live_action != :home do
         socket
       else
-        case ds().get_recent_blocks(@home_recent_blocks_limit) do
+        case ds().get_recent_blocks(100) do
           {:ok, list} when is_list(list) ->
             tip =
               case list do
@@ -686,7 +685,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           Live blocks
         </h2>
         <p class="mb-2 text-xs text-zinc-500">
-          <%= length(@blocks) %> recent blocks (tip downward). Scroll the table for more — up to ~<%= @home_recent_blocks_limit %> loaded from the indexer.
+          <%= length(@blocks) %> recent blocks (tip downward). Scroll the table for more — up to ~100 loaded from Esplora.
         </p>
         <p :if={@blocks_error} class="mb-2 text-sm text-orange-300"><%= @blocks_error %></p>
         <div class="overflow-x-auto rounded-lg border border-zinc-800">
