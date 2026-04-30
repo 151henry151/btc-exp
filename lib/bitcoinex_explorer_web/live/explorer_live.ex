@@ -3,6 +3,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   alias Bitcoinex.{Base58, PSBT, Segwit}
   alias Bitcoinex.LightningNetwork.Invoice
+  alias Decimal
 
   @impl true
   def mount(_params, _session, socket) do
@@ -205,16 +206,13 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp decode_invoice(value) do
     case Invoice.decode(value) do
       {:ok, invoice} ->
-        sats = msat_to_sat(invoice.amount_msat)
-        btc = sat_to_btc(sats)
-
         {:ok,
          %{
            tool: :invoice,
            input_type: "Lightning invoice (BOLT11)",
            network: Atom.to_string(invoice.network),
-           amount_sat: sats,
-           amount_btc: btc,
+           amount_sat: format_invoice_sats(invoice.amount_msat),
+           amount_btc: format_invoice_btc(invoice.amount_msat),
            description: invoice.description || "(none)",
            destination_pubkey: invoice.destination,
            expiry_seconds: invoice.expiry,
@@ -239,7 +237,8 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
            input_type: "PSBT",
            input_count: length(inputs),
            output_count: length(outputs),
-           unsigned_tx_id: "Unavailable from unsigned tx in this parser",
+           unsigned_tx_id:
+             "Unsigned PSBTs don't have a valid txid until finalized",
            input_derivations: format_input_derivations(psbt.inputs || []),
            output_amounts: format_output_amounts(outputs)
          }}
@@ -297,11 +296,47 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp legacy_prefix_info(0xC4), do: {"testnet/regtest", "p2sh (legacy address detected)"}
   defp legacy_prefix_info(_), do: {"unknown", "base58 (legacy address detected)"}
 
-  defp msat_to_sat(nil), do: "n/a"
-  defp msat_to_sat(msat) when is_integer(msat), do: msat / 1000
+  defp format_invoice_sats(nil), do: "n/a"
 
-  defp sat_to_btc("n/a"), do: "n/a"
-  defp sat_to_btc(sat) when is_number(sat), do: sat / 100_000_000
+  defp format_invoice_sats(msat) when is_integer(msat) do
+    whole = div(msat, 1000)
+    rem_msat = rem(msat, 1000)
+
+    if rem_msat == 0 do
+      Integer.to_string(whole)
+    else
+      frac =
+        rem_msat
+        |> Integer.to_string()
+        |> String.pad_leading(3, "0")
+        |> String.trim_trailing("0")
+
+      "#{whole}.#{frac}"
+    end
+  end
+
+  defp format_invoice_btc(nil), do: "n/a"
+
+  defp format_invoice_btc(msat) when is_integer(msat) do
+    # BTC = msat / 100_000_000_000 (1000 msat/sat × 10^8 sat/BTC)
+    msat
+    |> Decimal.new()
+    |> Decimal.div(Decimal.new(100_000_000_000))
+    |> Decimal.round(11)
+    |> Decimal.normalize()
+    |> Decimal.to_string(:normal)
+    |> trim_trailing_decimal_zeros()
+  end
+
+  defp trim_trailing_decimal_zeros(str) when is_binary(str) do
+    if String.contains?(str, ".") do
+      str
+      |> String.trim_trailing("0")
+      |> String.trim_trailing(".")
+    else
+      str
+    end
+  end
 
   defp format_input_derivations(inputs) do
     inputs

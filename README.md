@@ -47,21 +47,22 @@ Production can mount the app under a **URL path prefix** (e.g. `/btcexp`): set *
 | Phoenix LiveView | `~> 0.20.17` |
 | Bandit | HTTP server (`~> 1.5`) |
 | Bitcoinex (Hex) | `~> 0.1.8` (resolved e.g. **0.1.8** in `mix.lock`) |
+| Decimal | Fixed-point display for Lightning BTC amounts (no float/scientific notation in the UI) |
 | Tailwind / esbuild | Asset pipeline for CSS/JS |
 
 ---
 
-## Production (typical hromp.com setup)
+## Production (behind a reverse proxy)
 
-Documented in **[`my-webserver-setup`](https://github.com/151henry151/my-webserver-setup)** for this host:
+Typical layout on **[https://hromp.com/btcexp/](https://hromp.com/btcexp/)**:
 
-- **nginx** terminates TLS and proxies **`https://hromp.com/btcexp/`** → **`http://127.0.0.1:40174/`**, with WebSocket upgrade headers for LiveView (`nginx/conf.d/00-hromp.com.conf`).
-- **systemd** runs **`mix phx.server`** from **`/home/henry/bitcoinex-explorer`** using **`scripts/bitcoinex-explorer.service`** and **`/home/henry/bitcoinex-explorer/.env.production`** (copy from **`.env.production.example`**; set **`SECRET_KEY_BASE`** with **`mix phx.gen.secret`**).
-- Before (re)starting after UI/asset changes: **`MIX_ENV=prod mix assets.deploy`**.
+- **Reverse proxy** (e.g. nginx): terminate TLS, proxy **`/btcexp/`** (including WebSocket upgrade headers for LiveView) to **`http://127.0.0.1:<PORT>/`** where Phoenix listens.
+- **Process supervisor**: run **`MIX_ENV=prod mix phx.server`** from the app checkout with env vars loaded from **`.env.production`** (copy **`.env.production.example`**; set **`SECRET_KEY_BASE`** via **`mix phx.gen.secret`**).
+- After HTML/CSS/JS changes: **`MIX_ENV=prod mix assets.deploy`** before restarting the release/server.
 
 Environment highlights (**`.env.production.example`**):
 
-- **`PORT=40174`**, **`PHX_HOST=hromp.com`**, **`PHX_PATH=btcexp`**, **`PHX_SERVER=true`**, **`MIX_ENV=prod`**.
+- **`PORT`** (e.g. **40174**), **`PHX_HOST`**, **`PHX_PATH=btcexp`** (must match the URL prefix the proxy strips/forwards), **`PHX_SERVER=true`**, **`MIX_ENV=prod`**.
 
 ---
 
@@ -78,8 +79,29 @@ Open **`http://127.0.0.1:4000/`** — no path prefix unless you set **`PHX_PATH`
 
 ## Tests
 
-- **ExUnit**: `mix test` — LiveView and form integration tests under **`test/`**.
-- **End-to-end (Playwright)**: headless Chromium against a running Phoenix app — **`e2e/`**.
+### ExUnit (`mix test`)
+
+Integration tests in **`test/bitcoinex_explorer_web/live/explorer_live_test.exs`** exercise **`ExplorerLive`** without a browser:
+
+| Test | What it checks | Why |
+|------|----------------|-----|
+| **renders explorer without tabs** | Title, paste hint, no tab UI (`phx-value-tab`) | Confirms the single-field UI contract and no regressions to the old tabbed layout. |
+| **auto-detects Lightning invoice** | `ln…` input → BOLT11 decode; **sats** as plain integer (**250000**); **BTC** as decimal (**0.0025**); refutes scientific notation | Ensures invoice path and **Decimal**-based formatting stay human-readable in HTML. |
+| **auto-detects PSBT** | Base64 magic → PSBT section and copy about **txid until finalized** | Guards PSBT detection and honest messaging for unsigned PSBTs. |
+| **Bech32 checksum error** | Invalid `bc1…` shows checksum failure, not the generic address decode error | Users should see precise SegWit validation feedback. |
+| **empty input** | No “Unable to decode” spam on clear field | Empty paste should not look like a failure. |
+| **invalid invoice** | Garbage `ln…` → friendly invoice decode error | Distinguishes malformed invoices from other decode paths. |
+
+### Playwright (`e2e/`)
+
+Headless Chromium drives the real LiveView page (fixtures in **`e2e/fixtures/vectors.ts`**):
+
+| Suite | What it covers | Why |
+|-------|----------------|-----|
+| **`address.spec.ts`** | SegWit/Base58 **success** vectors; SegWit **error** vectors (bad checksum, mixed case, etc.); **total failure** inputs | End-to-end confidence that address auto-detect matches Bitcoinex behavior and error copy in the DOM. |
+| **`invoice.spec.ts`** | Valid BOLT11 fixtures and **error** rows | Same for Lightning invoices without manually repeating every ExUnit assertion in a browser. |
+| **`psbt.spec.ts`** | One minimal valid PSBT (checks **Inputs**/**Outputs** counts) plus **PSBT_ERRORS** | Validates PSBT magic detection and structured output; errors stay visible to users. |
+| **`edge-cases.spec.ts`** | Whitespace trim; uppercase Bech32; clearing input resets UI; empty input clears errors; `bc1` prefix garbage yields SegWit error (not legacy) | Catches UX/regression issues that unit tests might miss (DOM lifecycle, trimming, cross-type clears). |
 
 ```sh
 cd e2e
@@ -97,7 +119,7 @@ Playwright **`baseURL`** must include the mount path when the app is served unde
 ## Known limitations
 
 - Legacy Base58 decoding is best-effort classification using version-byte prefixes.
-- PSBT **unsigned transaction ID** is shown as unavailable — this parser path does not expose a ready-made txid helper in the UI.
+- PSBT **unsigned transaction ID** is not shown as a real txid — unsigned PSBTs do not have a valid txid until finalized (the UI states this explicitly instead of implying a parser gap).
 - Auto-detection assumes **BOLT11** strings start with **`ln`** and **PSBT** base64 starts with the standard magic; unusual encodings may need future heuristics.
 
 ---

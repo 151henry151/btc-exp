@@ -24,6 +24,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLiveTest do
 
     assert html =~ "Lightning invoice (BOLT11)"
     assert html =~ "mainnet"
+    assert html =~ "250000"
+    assert html =~ "0.0025"
+    refute html =~ "2.5e"
   end
 
   test "auto-detects PSBT by base64 magic", %{conn: conn} do
@@ -39,6 +42,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLiveTest do
 
     assert html =~ "PSBT"
     assert html =~ "Inputs"
+    assert html =~ "valid txid until finalized"
   end
 
   test "shows Bech32 checksum error for invalid bc1 address, not generic decode", %{conn: conn} do

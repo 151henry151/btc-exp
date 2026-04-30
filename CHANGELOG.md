@@ -5,6 +5,17 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7] - 2026-04-30
+
+- Expand **`README.md`** tests section with per-suite and per-case rationale (**ExUnit** + **Playwright**).
+- Rewrite production deployment notes without referencing private infrastructure repos; simplify **`.env.production.example`** comments.
+
+## [0.2.6] - 2026-04-30
+
+- Format Lightning **amount (sats)** as plain integers and **amount (BTC)** as fixed-point decimals (no scientific notation); use **`Decimal`** for BTC strings.
+- Replace PSBT “unsigned tx id” placeholder with an explanation that **unsigned PSBTs don't have a valid txid until finalized**.
+- Add **`decimal`** as a direct **`mix.exs`** dependency; document it in **`README.md`**.
+
 ## [0.2.5] - 2026-04-30
 
 - Expand **`README.md`** with architecture, auto-detection order, production env summary, and accurate stack versions.
