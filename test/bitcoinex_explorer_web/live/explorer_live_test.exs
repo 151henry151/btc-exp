@@ -3,7 +3,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLiveTest do
 
   import Phoenix.LiveViewTest
 
-  test "renders explorer without tabs", %{conn: conn} do
+  test "renders explorer", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/")
 
     assert html =~ "Bitcoinex Explorer"

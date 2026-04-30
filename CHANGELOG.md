@@ -5,6 +5,11 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.8] - 2026-04-30
+
+- Tighten **`README.md`** test and limitation wording (forward-looking copy); remove optional screenshot note.
+- Rename ExUnit **`renders explorer without tabs`** to **`renders explorer`** (assertions unchanged).
+
 ## [0.2.7] - 2026-04-30
 
 - Expand **`README.md`** tests section with per-suite and per-case rationale (**ExUnit** + **Playwright**).

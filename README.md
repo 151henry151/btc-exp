@@ -85,10 +85,10 @@ Integration tests in **`test/bitcoinex_explorer_web/live/explorer_live_test.exs`
 
 | Test | What it checks | Why |
 |------|----------------|-----|
-| **renders explorer without tabs** | Title, paste hint, no tab UI (`phx-value-tab`) | Confirms the single-field UI contract and no regressions to the old tabbed layout. |
-| **auto-detects Lightning invoice** | `ln…` input → BOLT11 decode; **sats** as plain integer (**250000**); **BTC** as decimal (**0.0025**); refutes scientific notation | Ensures invoice path and **Decimal**-based formatting stay human-readable in HTML. |
-| **auto-detects PSBT** | Base64 magic → PSBT section and copy about **txid until finalized** | Guards PSBT detection and honest messaging for unsigned PSBTs. |
-| **Bech32 checksum error** | Invalid `bc1…` shows checksum failure, not the generic address decode error | Users should see precise SegWit validation feedback. |
+| **renders explorer** | Title, paste hint, LiveView shell | Smoke-checks the shell users land on before pasting input. |
+| **auto-detects Lightning invoice** | `ln…` input → BOLT11 decode; **sats** as plain integer (**250000**); **BTC** as decimal (**0.0025**) | Ensures invoice decoding and **Decimal**-based amounts render clearly in HTML. |
+| **auto-detects PSBT** | Base64 magic → PSBT section and copy about **txid until finalized** | Guards PSBT detection and clear messaging for unsigned PSBTs. |
+| **Bech32 checksum error** | Invalid `bc1…` surfaces checksum verification failure | Users get SegWit-specific validation feedback for bad Bech32 data. |
 | **empty input** | No “Unable to decode” spam on clear field | Empty paste should not look like a failure. |
 | **invalid invoice** | Garbage `ln…` → friendly invoice decode error | Distinguishes malformed invoices from other decode paths. |
 
@@ -101,7 +101,7 @@ Headless Chromium drives the real LiveView page (fixtures in **`e2e/fixtures/vec
 | **`address.spec.ts`** | SegWit/Base58 **success** vectors; SegWit **error** vectors (bad checksum, mixed case, etc.); **total failure** inputs | End-to-end confidence that address auto-detect matches Bitcoinex behavior and error copy in the DOM. |
 | **`invoice.spec.ts`** | Valid BOLT11 fixtures and **error** rows | Same for Lightning invoices without manually repeating every ExUnit assertion in a browser. |
 | **`psbt.spec.ts`** | One minimal valid PSBT (checks **Inputs**/**Outputs** counts) plus **PSBT_ERRORS** | Validates PSBT magic detection and structured output; errors stay visible to users. |
-| **`edge-cases.spec.ts`** | Whitespace trim; uppercase Bech32; clearing input resets UI; empty input clears errors; `bc1` prefix garbage yields SegWit error (not legacy) | Catches UX/regression issues that unit tests might miss (DOM lifecycle, trimming, cross-type clears). |
+| **`edge-cases.spec.ts`** | Whitespace trim; uppercase Bech32; clearing input resets UI; empty input clears errors; malformed `bc1`-prefixed input surfaces SegWit decode errors | Catches UX issues unit tests might miss (DOM lifecycle, trimming, cross-type clears). |
 
 ```sh
 cd e2e
@@ -119,11 +119,5 @@ Playwright **`baseURL`** must include the mount path when the app is served unde
 ## Known limitations
 
 - Legacy Base58 decoding is best-effort classification using version-byte prefixes.
-- PSBT **unsigned transaction ID** is not shown as a real txid — unsigned PSBTs do not have a valid txid until finalized (the UI states this explicitly instead of implying a parser gap).
+- PSBT **unsigned transaction ID** is not shown as a real txid — unsigned PSBTs do not have a valid txid until finalized.
 - Auto-detection assumes **BOLT11** strings start with **`ln`** and **PSBT** base64 starts with the standard magic; unusual encodings may need future heuristics.
-
----
-
-## Screenshot
-
-Optional: add a UI screenshot under **`docs/`** once you want a frozen visual reference.
