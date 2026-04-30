@@ -4,13 +4,15 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   import Phoenix.LiveView, only: [connected?: 1, redirect: 2, push_patch: 2]
 
   alias BitcoinexExplorer.{
+    DataSource,
     Decode,
-    Esplora,
     OutputClassifier,
     Search,
     TxEnrichment,
     TxFlow
   }
+
+  defp ds, do: DataSource.impl()
 
   @poll_blocks_ms 15_000
   @poll_mempool_ms 30_000
@@ -143,7 +145,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp fetch_home_data(socket) do
     socket =
-      case Esplora.blocks() do
+      case ds().get_recent_blocks(100) do
         {:ok, list} when is_list(list) ->
           tip =
             case list do
@@ -151,14 +153,14 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               _ -> nil
             end
 
-          assign(socket, blocks: Enum.take(list, 10), tip_hash: tip, blocks_error: nil)
+          assign(socket, blocks: list, tip_hash: tip, blocks_error: nil)
 
         {:error, reason} ->
           assign(socket, blocks_error: esplora_err(reason))
       end
 
     socket =
-      case Esplora.fee_estimates() do
+      case ds().get_fee_estimates() do
         {:ok, fees} ->
           assign(socket, fee_estimates: fees)
 
@@ -167,7 +169,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       end
 
     socket =
-      case Esplora.mempool() do
+      case ds().get_mempool() do
         {:ok, stats} ->
           assign(socket, mempool_stats: stats, mempool_error: nil)
 
@@ -182,7 +184,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
     hash = String.downcase(hash)
 
     socket =
-      case Esplora.block(hash) do
+      case ds().get_block(hash) do
         {:ok, block} ->
           miner = guess_miner(block)
 
@@ -218,7 +220,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   end
 
   defp guess_miner(block) do
-    case Esplora.block_txs(block["id"], 0) do
+    case ds().get_block_txs(block["id"], 0) do
       {:ok, [coinbase | _]} ->
         TxEnrichment.enrich_vin(Enum.at(Map.get(coinbase, "vin", []), 0) || %{})["coinbase_text"]
 
@@ -228,7 +230,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   end
 
   defp fetch_block_tx_page(socket, hash, start_index) do
-    case Esplora.block_txs(hash, start_index) do
+    case ds().get_block_txs(hash, start_index) do
       {:ok, txs} when is_list(txs) ->
         txs = txs || []
         next = length(txs) == 25
@@ -261,7 +263,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp load_tx(socket, txid) when is_binary(txid) do
     txid = String.downcase(txid)
 
-    case Esplora.transaction(txid) do
+    case ds().get_tx(txid) do
       {:ok, tx} ->
         vin = Enum.map(Map.get(tx, "vin", []) || [], &TxEnrichment.enrich_vin/1)
         vout = Enum.map(Map.get(tx, "vout", []) || [], &TxEnrichment.enrich_vout/1)
@@ -306,7 +308,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       |> assign(:addr_decode, decode)
 
     socket =
-      case Esplora.address(addr) do
+      case ds().get_address(addr) do
         {:ok, info} ->
           assign(socket, addr_info: info, addr_error: nil)
 
@@ -317,7 +319,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           assign(socket, addr_info: nil, addr_error: esplora_err(reason))
       end
 
-    case Esplora.address_txs(addr) do
+    case ds().get_address_txs(addr, nil) do
       {:ok, txs} when is_list(txs) ->
         last = List.last(txs)
         last_id = if last, do: Map.get(last, "txid"), else: nil
@@ -401,12 +403,12 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           end
 
         {:hex64, h} ->
-          case Esplora.transaction(h) do
+          case ds().get_tx(h) do
             {:ok, _} ->
               {:noreply, push_patch(socket, to: ~p"/tx/#{h}")}
 
             {:error, _} ->
-              case Esplora.block(h) do
+              case ds().get_block(h) do
                 {:ok, _} ->
                   {:noreply, push_patch(socket, to: ~p"/block/#{h}")}
 
@@ -463,7 +465,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
     addr = socket.assigns.addr_string
     last = socket.assigns.addr_txs_last
 
-    case Esplora.address_txs(addr, last) do
+    case ds().get_address_txs(addr, last) do
       {:ok, more} when is_list(more) and more != [] ->
         merged = socket.assigns.addr_txs ++ more
         last = List.last(more) |> then(&Map.get(&1, "txid"))
@@ -485,7 +487,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       if socket.assigns.live_action != :home do
         socket
       else
-        case Esplora.blocks() do
+        case ds().get_recent_blocks(100) do
           {:ok, list} when is_list(list) ->
             tip =
               case list do
@@ -496,7 +498,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             socket =
               if tip != socket.assigns.tip_hash do
                 socket
-                |> assign(:blocks, Enum.take(list, 10))
+                |> assign(:blocks, list)
                 |> assign(:tip_hash, tip)
               else
                 socket
@@ -520,7 +522,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       if socket.assigns.live_action != :home do
         socket
       else
-        case Esplora.mempool() do
+        case ds().get_mempool() do
           {:ok, stats} ->
             assign(socket, :mempool_stats, stats)
 
@@ -562,10 +564,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         <nav class="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
           <.link href="https://hromp.com/" class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline">
             hromp.com
-          </.link>
-          <span class="text-zinc-600">·</span>
-          <.link href="https://hromp.com/bitcoinex-explorer/" class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline">
-            about
           </.link>
           <span class="text-zinc-600">·</span>
           <.link
@@ -632,33 +630,65 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp home_view(assigns) do
     ~H"""
     <div class="flex flex-col gap-8">
-      <section class="grid gap-4 lg:grid-cols-2">
+      <section class="grid gap-4 md:grid-cols-2">
         <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-          <h2 class="mb-3 flex items-center gap-2 text-lg font-medium text-zinc-200">
-            <span class="relative flex h-2 w-2">
-              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75">
-              </span>
-              <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+          <h2 class="mb-3 text-lg font-medium text-zinc-200">Mempool</h2>
+          <p :if={@mempool_error} class="text-sm text-orange-300"><%= @mempool_error %></p>
+          <%= if @mempool_stats do %>
+            <dl class="grid grid-cols-2 gap-2 text-sm">
+              <dt class="text-zinc-500">Pending txs</dt>
+              <dd class="font-mono"><%= @mempool_stats["count"] %></dd>
+              <dt class="text-zinc-500">Virtual size</dt>
+              <dd class="font-mono"><%= format_vsize(@mempool_stats["vsize"]) %></dd>
+            </dl>
+          <% end %>
+        </div>
+
+        <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+          <h2 class="mb-3 text-lg font-medium text-zinc-200">Fee estimates (sat/vB)</h2>
+          <div class="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+            <%= for {label, target} <- [{"Next", 1}, {"3 blk", 3}, {"6 blk", 6}, {"~1d", 144}] do %>
+              <div class="rounded-lg bg-zinc-950 p-2">
+                <div class="text-xs text-zinc-500"><%= label %></div>
+                <div class={"mt-1 font-mono #{fee_class(fee_at(@fee_estimates, target))}"}>
+                  <%= fmt_fee(fee_at(@fee_estimates, target)) %>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <h2 class="mb-3 flex items-center gap-2 text-lg font-medium text-zinc-200">
+          <span class="relative flex h-2 w-2">
+            <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75">
             </span>
-            Live blocks
-          </h2>
-          <p :if={@blocks_error} class="mb-2 text-sm text-orange-300"><%= @blocks_error %></p>
-          <div class="overflow-x-auto">
+            <span class="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+          </span>
+          Live blocks
+        </h2>
+        <p class="mb-2 text-xs text-zinc-500">
+          <%= length(@blocks) %> recent blocks (tip downward). Scroll the table for more — up to ~100 loaded from Esplora.
+        </p>
+        <p :if={@blocks_error} class="mb-2 text-sm text-orange-300"><%= @blocks_error %></p>
+        <div class="overflow-x-auto rounded-lg border border-zinc-800">
+          <div class="max-h-[11rem] overflow-y-auto overscroll-y-contain">
             <table class="w-full text-left text-sm">
-              <thead class="text-xs uppercase text-zinc-500">
+              <thead class="sticky top-0 z-10 bg-zinc-900 text-xs uppercase text-zinc-500 shadow-[0_1px_0_0_rgba(39,39,42,0.9)]">
                 <tr>
-                  <th class="pb-2">Height</th>
-                  <th class="pb-2">Hash</th>
-                  <th class="pb-2">When</th>
-                  <th class="pb-2">Txs</th>
-                  <th class="pb-2">Size</th>
+                  <th class="px-2 py-2">Height</th>
+                  <th class="px-2 py-2">Hash</th>
+                  <th class="px-2 py-2">When</th>
+                  <th class="px-2 py-2">Txs</th>
+                  <th class="px-2 py-2">Size</th>
                 </tr>
               </thead>
               <tbody class="font-mono text-xs text-zinc-300">
                 <%= for b <- @blocks do %>
-                  <tr class="transition hover:bg-zinc-800/60">
-                    <td class="py-2 pr-2"><%= b["height"] %></td>
-                    <td class="py-2 pr-2">
+                  <tr class="border-t border-zinc-800/80 transition hover:bg-zinc-800/60">
+                    <td class="px-2 py-2"><%= b["height"] %></td>
+                    <td class="px-2 py-2">
                       <.link
                         navigate={~p"/block/#{b["id"]}"}
                         class="text-[#f7931a] hover:underline"
@@ -667,7 +697,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                         <%= truncate_middle(b["id"], 14) %>
                       </.link>
                     </td>
-                    <td class="py-2 pr-2 whitespace-nowrap">
+                    <td class="px-2 py-2 whitespace-nowrap">
                       <span
                         phx-hook="RelativeTime"
                         id={"blk-#{b["id"]}"}
@@ -677,41 +707,12 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                         <%= fmt_rel(b["timestamp"]) %>
                       </span>
                     </td>
-                    <td class="py-2 pr-2"><%= b["tx_count"] %></td>
-                    <td class="py-2"><%= format_kb(b["size"]) %></td>
+                    <td class="px-2 py-2"><%= b["tx_count"] %></td>
+                    <td class="px-2 py-2"><%= format_kb(b["size"]) %></td>
                   </tr>
                 <% end %>
               </tbody>
             </table>
-          </div>
-        </div>
-
-        <div class="space-y-4">
-          <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-            <h2 class="mb-3 text-lg font-medium text-zinc-200">Mempool</h2>
-            <p :if={@mempool_error} class="text-sm text-orange-300"><%= @mempool_error %></p>
-            <%= if @mempool_stats do %>
-              <dl class="grid grid-cols-2 gap-2 text-sm">
-                <dt class="text-zinc-500">Pending txs</dt>
-                <dd class="font-mono"><%= @mempool_stats["count"] %></dd>
-                <dt class="text-zinc-500">Virtual size</dt>
-                <dd class="font-mono"><%= format_vsize(@mempool_stats["vsize"]) %></dd>
-              </dl>
-            <% end %>
-          </div>
-
-          <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-            <h2 class="mb-3 text-lg font-medium text-zinc-200">Fee estimates (sat/vB)</h2>
-            <div class="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-              <%= for {label, target} <- [{"Next", 1}, {"3 blk", 3}, {"6 blk", 6}, {"~1d", 144}] do %>
-                <div class="rounded-lg bg-zinc-950 p-2">
-                  <div class="text-xs text-zinc-500"><%= label %></div>
-                  <div class={"mt-1 font-mono #{fee_class(fee_at(@fee_estimates, target))}"}>
-                    <%= fmt_fee(fee_at(@fee_estimates, target)) %>
-                  </div>
-                </div>
-              <% end %>
-            </div>
           </div>
         </div>
       </section>

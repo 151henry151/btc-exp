@@ -5,6 +5,15 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-30
+
+- Add **`BitcoinexExplorer.DataSource`** behaviour; refactor **`ExplorerLive`** and **`BlockHeightController`** to **`DataSource.impl()`**.
+- Implement **`BitcoinexExplorer.Esplora`** as behaviour backend (existing HTTP API unchanged).
+- Implement **`BitcoinexExplorer.BitcoinRPC`** (Bitcoin Core JSON-RPC + **`BitcoinRpcNormalize`**) and **`BitcoinexExplorer.FulcrumClient`** (Electrum TCP/TLS with backoff).
+- Add **`BitcoinexExplorer.Scripthash`** (address → Electrum scripthash); wire **`DATA_SOURCE`** / RPC env vars in **`config/runtime.exs`**; start **`FulcrumClient`** only when **`DATA_SOURCE=rpc`**.
+- Add **`BitcoinCoreRpc`** Tesla JSON-RPC client with binary-body decode fallback; add fixtures and ExUnit (Bypass + mock TCP).
+- Expand **`README.md`** self-hosting guide for Core + Fulcrum; document RPC-mode address totals (**funded/spent**) not yet implemented and **planned** aggregation; expand **`.env.production.example`**.
+
 ## [0.3.1] - 2026-04-30
 
 - Replace top-nav **GitHub** link with **About** pointing at **`https://hromp.com/bitcoinex-explorer/`**; document footer GitHub links in **`README.md`**.

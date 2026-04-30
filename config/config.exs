@@ -9,7 +9,20 @@ import Config
 
 config :bitcoinex_explorer,
   generators: [timestamp_type: :utc_datetime],
-  esplora_base_url: "https://blockstream.info/api"
+  esplora_base_url: "https://blockstream.info/api",
+  data_source_module: BitcoinexExplorer.Esplora,
+  start_fulcrum_client: false,
+  bitcoin_rpc_url: "http://127.0.0.1:8332",
+  bitcoin_rpc_user: "",
+  bitcoin_rpc_pass: "",
+  fulcrum_host: "127.0.0.1",
+  fulcrum_port: 50001,
+  fulcrum_ssl: false,
+  fulcrum_ssl_opts: [
+    verify: :verify_none,
+    server_name_indication: :disable
+  ],
+  fulcrum_request_timeout: 15_000
 
 # Configures the endpoint
 config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint,

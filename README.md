@@ -1,6 +1,6 @@
 # Bitcoinex Explorer
 
-**Bitcoin block explorer** plus a **Bitcoinex**-powered inspector: live blocks/mempool/fee estimates from an Esplora-compatible API, deep-linked **block / transaction / address** pages, D3 visualizations, and the original **single-field** decode for addresses, **BOLT11** invoices, and **PSBT** payloads. Built with **[River Financial’s Bitcoinex](https://github.com/RiverFinancial/bitcoinex)** on **Elixir / Phoenix LiveView**.
+**Bitcoin block explorer** plus a **Bitcoinex**-powered inspector: live blocks/mempool/fee estimates from a pluggable chain backend (**Esplora** HTTP by default, or **Bitcoin Core + Fulcrum** when self-hosted), deep-linked **block / transaction / address** pages, D3 visualizations, and the original **single-field** decode for addresses, **BOLT11** invoices, and **PSBT** payloads. Built with **[River Financial’s Bitcoinex](https://github.com/RiverFinancial/bitcoinex)** on **Elixir / Phoenix LiveView**.
 
 | Resource | URL |
 |----------|-----|
@@ -16,12 +16,12 @@ Licensed under the **MIT License** — see [`LICENSE`](LICENSE).
 
 ## What it does
 
-### Chain explorer (Esplora API)
+### Chain explorer (`BitcoinexExplorer.DataSource`)
 
 - **Home** — Recent blocks (poll), mempool stats (poll), fee estimates; universal **search** bar (txid / block hash / height / address / invoice / PSBT).
 - **`/block/:hash`** — Header metadata, paginated txs, **script-type distribution** chart (Bitcoinex-classified outputs).
 - **`/tx/:txid`** — Fees, confirmations, **flow diagram** (D3), input/output tables with **Bitcoinex enrichment** (network, type, witness program, payload).
-- **`/address/:address`** — Balance and history from Esplora; **QR** code hook; Bitcoinex decode summary at top.
+- **`/address/:address`** — Balance and history from the configured backend (Esplora HTTP or Bitcoin Core + Fulcrum); **QR** code hook; Bitcoinex decode summary at top.
 - **`/block/height/:height`** — Redirects to **`/block/:hash`** via **`BlockHeightController`**.
 
 ### Local decode (Bitcoinex only)
@@ -41,14 +41,14 @@ Universal **search** uses **`BitcoinexExplorer.Search`**: **64-char hex** tries 
 | Layer | Details |
 |-------|---------|
 | **HTTP / WebSocket** | [**Bandit**](https://hex.pm/packages/bandit) serves Phoenix. [**LiveView**](https://hexdocs.pm/phoenix_live_view/) **`ExplorerLive`** uses **`handle_params/3`** for **`live_session`** routes (`router.ex`). |
-| **Chain data** | **`BitcoinexExplorer.Esplora`** (**Tesla** + **Hackney**) calls **`ESPLORA_BASE_URL`** (default Blockstream public API). Timeouts **5s**; **no** cache. |
+| **Chain data** | **`BitcoinexExplorer.DataSource.impl()`** selects **`BitcoinexExplorer.Esplora`** (Esplora-compatible **`ESPLORA_BASE_URL`**, default Blockstream) or **`BitcoinexExplorer.BitcoinRPC`** (Bitcoin Core JSON-RPC + Fulcrum Electrum). See **Self-hosting with a Bitcoin full node** below. |
 | **Routing / search** | **`BitcoinexExplorer.Search`** classifies nav input; **`push_patch`** / **`redirect`** keep URLs shareable. |
-| **Bitcoinex** | **`BitcoinexExplorer.Decode`** (local decode); **`TxEnrichment`**, **`OutputClassifier`**, **`TxFlow`** combine Esplora JSON with Segwit/Base58 decoders. |
+| **Bitcoinex** | **`BitcoinexExplorer.Decode`** (local decode); **`TxEnrichment`**, **`OutputClassifier`**, **`TxFlow`** combine normalized chain JSON with Segwit/Base58 decoders. |
 | **UI** | Tailwind; **D3** stacked bar + tx flow (**`assets/js/hooks.js`**); **qrcode** for address QR; relative time hook. |
 | **Assets** | Tailwind + esbuild (**`npm`** deps under **`assets/`**); **`mix assets.deploy`** → **`priv/static/`**. |
 | **Root layout** | **`live_view_root_only`** — no nested app layout (`bitcoinex_explorer_web.ex`). |
 
-Production can mount under a **path prefix** (e.g. **`/btcexp`**): set **`PHX_PATH`**, **`PHX_HOST`**, and optional **`ESPLORA_BASE_URL`** — **`config/runtime.exs`**, **`.env.production.example`**.
+Production can mount under a **path prefix** (e.g. **`/btcexp`**): set **`PHX_PATH`**, **`PHX_HOST`**, and optional **`DATA_SOURCE`** / **`ESPLORA_BASE_URL`** or RPC-related vars — **`config/runtime.exs`**, **`.env.production.example`**.
 
 ---
 
@@ -63,7 +63,7 @@ Production can mount under a **path prefix** (e.g. **`/btcexp`**): set **`PHX_PA
 | Bitcoinex (Hex) | `~> 0.1.8` (resolved e.g. **0.1.8** in `mix.lock`) |
 | Decimal | Fixed-point display for Lightning BTC amounts (no float/scientific notation in the UI) |
 | Tailwind / esbuild | Asset pipeline for CSS/JS |
-| Tesla + Hackney | Esplora HTTP client |
+| Tesla + Hackney | Esplora HTTP client + Bitcoin Core JSON-RPC (Basic auth) |
 | d3 / qrcode (npm) | LiveView hooks for charts, flow, QR |
 
 ---
@@ -79,7 +79,136 @@ Typical layout on **[https://hromp.com/btcexp/](https://hromp.com/btcexp/)**:
 Environment highlights (**`.env.production.example`**):
 
 - **`PORT`** (e.g. **40174**), **`PHX_HOST`**, **`PHX_PATH=btcexp`** (must match the URL prefix the proxy strips/forwards), **`PHX_SERVER=true`**, **`MIX_ENV=prod`**.
-- Optional **`ESPLORA_BASE_URL`** (defaults to **`https://blockstream.info/api`**).
+- Optional **`ESPLORA_BASE_URL`** (defaults to **`https://blockstream.info/api`**) when **`DATA_SOURCE=esplora`** (default).
+- **`DATA_SOURCE`** — **`esplora`** (default) or **`rpc`** (Bitcoin Core + Fulcrum); see **Self-hosting with a Bitcoin full node**.
+
+---
+
+## Self-hosting with a Bitcoin full node
+
+This section is for operators who want the explorer to read **their own** archival Bitcoin Core node (with **`txindex`**) and **Fulcrum** for address indexing. The LiveView UI is identical to **`DATA_SOURCE=esplora`** as long as both backends return the same normalized maps (enforced by tests around **`BitcoinexExplorer.DataSource`**).
+
+### Overview
+
+Three components run together:
+
+1. **Bitcoin Core** — Full **non-pruned** node with **`txindex=1`** so **`getrawtransaction`** works for any txid on main chain. Supplies blocks, transactions, mempool, and fee estimates via JSON-RPC.
+2. **Fulcrum** — Electrum-protocol server that maintains an **address index** on top of Core. The app uses Fulcrum for **`blockchain.scripthash.*`** calls (balance + history); Bitcoin Core RPC still loads full transactions after history lists txids.
+3. **Bitcoinex Explorer** (this Phoenix app) — **`DATA_SOURCE=rpc`** enables **`BitcoinexExplorer.BitcoinRPC`** plus a supervised **`BitcoinexExplorer.FulcrumClient`** (persistent TCP/TLS to Fulcrum).
+
+**Hardware (approximate, increases over time):** expect **700GB+** disk for mainnet blocks and indexes (prefer **SSD/NVMe**), **8GB+ RAM**, and a modern multi-core CPU. **Initial block download** typically takes **several days** depending on bandwidth and peers. Fulcrum’s first index build after Core is synced commonly takes on the order of **12–48 hours** (often faster on fast NVMe).
+
+### Installing Bitcoin Core
+
+- Download official binaries from **[bitcoincore.org](https://bitcoincore.org)** (verify signatures using the project’s release process).
+- **Full archival node:** do **not** use pruning for this deployment — the explorer expects full blocks and **`txindex`**.
+- **`bitcoin.conf`** (minimal sketch — adjust paths and credentials):
+
+  ```
+  txindex=1
+  server=1
+  rpcuser=<choose_a_username>
+  rpcpassword=<strong_random_password>
+  rpcbind=127.0.0.1
+  rpcallowip=127.0.0.1
+  zmqpubrawblock=tcp://127.0.0.1:28332
+  zmqpubrawtx=tcp://127.0.0.1:28333
+  ```
+
+  ZMQ is optional for this explorer but commonly used by other indexers/wallets.
+
+- **Wait for initial sync** before starting Fulcrum. Verify with **`bitcoin-cli getblockchaininfo`**: **`initialblockdownload`** should be **`false`**, and **`blocks`** should match **`headers`** (for fully synced nodes).
+- Verify **`txindex`** with **`bitcoin-cli getindexinfo`** — **`txindex`** should report **`synced: true`** once built.
+- Enabling **`txindex=1`** on an already-synced node requires a **reindex** (often **many hours**): e.g. **`bitcoind -reindex`** once, then let it complete.
+
+### Installing Fulcrum
+
+- Project home: **[github.com/cculianu/Fulcrum](https://github.com/cculianu/Fulcrum)** (releases and documentation).
+- Fulcrum builds an address index from Bitcoin Core’s block files and RPC; **start Fulcrum only after Bitcoin Core is fully synced**.
+- **`fulcrum.conf`** (minimal sketch):
+
+  ```
+  bitcoin-rpc-url = http://127.0.0.1:8332
+  bitcoin-rpc-user = <same rpcuser as bitcoin.conf>
+  bitcoin-rpc-password = <same rpcpassword as bitcoin.conf>
+  datadir = /path/to/fulcrum/data
+  tcp = 127.0.0.1:50001
+  # Optional TLS (needs cert/key files):
+  # ssl = 127.0.0.1:50002
+  # cert = /path/to/cert.pem
+  # key = /path/to/key.pem
+  ```
+
+- Initial Fulcrum sync can take **hours to a day or more** depending on CPU/disk; watch logs for a **ready** / **listening** style completion message (exact wording follows Fulcrum version).
+- Quick manual check from the shell (TCP mode):
+
+  ```sh
+  echo '{"id":1,"method":"server.version","params":["bitcoinex-explorer","1.4"]}' | nc 127.0.0.1 50001
+  ```
+
+  You should receive a one-line JSON response.
+
+- **Never expose Fulcrum (or Bitcoin RPC) to the public Internet** without TLS, firewalling, and tight access control — see **Security notes**.
+
+### Configuring Bitcoinex Explorer for RPC mode
+
+Set **`DATA_SOURCE=rpc`** and provide:
+
+| Variable | Purpose |
+|----------|---------|
+| **`BITCOIN_RPC_URL`** | JSON-RPC base URL, e.g. **`http://127.0.0.1:8332`** |
+| **`BITCOIN_RPC_USER`** / **`BITCOIN_RPC_PASS`** | HTTP Basic credentials matching **`rpcuser`** / **`rpcpassword`** |
+| **`FULCRUM_HOST`** | Fulcrum hostname (typically **`127.0.0.1`**) |
+| **`FULCRUM_PORT`** | Fulcrum TCP port (e.g. **`50001`**) |
+| **`FULCRUM_SSL`** | **`true`** / **`false`** — use TLS only if Fulcrum listens with **`ssl = …`** and you configure verification appropriately |
+
+**Example `.env.production` skeleton (RPC mode):**
+
+```bash
+MIX_ENV=prod
+PHX_SERVER=true
+DATA_SOURCE=rpc
+PORT=40174
+PHX_HOST=your-domain.example
+PHX_PATH=btcexp
+SECRET_KEY_BASE=<output of mix phx.gen.secret>
+
+BITCOIN_RPC_URL=http://127.0.0.1:8332
+BITCOIN_RPC_USER=explorer_rpc
+BITCOIN_RPC_PASS=<openssl rand -hex 32>
+
+FULCRUM_HOST=127.0.0.1
+FULCRUM_PORT=50001
+FULCRUM_SSL=false
+```
+
+**Startup order:** Bitcoin Core fully synced → Fulcrum fully synced → start Phoenix. **`FulcrumClient`** reconnects with backoff if Fulcrum is not ready yet; the UI becomes usable once RPC + Fulcrum calls succeed.
+
+### Address page totals (`DATA_SOURCE=rpc`)
+
+Esplora’s **`/address/…`** API exposes **`chain_stats`** / **`mempool_stats`** with **lifetime funded**, **spent**, and **tx count** aggregates precomputed by the indexer.
+
+With **`DATA_SOURCE=rpc`** today we only expose:
+
+- **Confirmed / unconfirmed balance** via Fulcrum **`blockchain.scripthash.get_balance`** (mapped into **`chain_stats`** / **`mempool_stats`** so the existing LiveView layout still renders).
+- **Tx history** via **`blockchain.scripthash.get_history`** plus **`getrawtransaction`** for full tx detail.
+
+We **do not** yet recompute Esplora-style **total received** (**`funded_txo_sum`**) and **total sent** (**`spent_txo_sum`**) for RPC mode. That requires iterating address history and summing inputs/outputs per tx (or maintaining a cache)—correct but **O(history)** per cold load unless background aggregation is added.
+
+**Planned:** add bounded incremental aggregation or a cached rollup keyed by address/script hash so RPC deployments match Esplora’s address-summary semantics without hammering **`getrawtransaction`** on every page view.
+
+### Security notes
+
+- **Do not expose Bitcoin Core RPC to the Internet.** RPC has powerful methods and no browser-grade rate limiting suitable for untrusted clients.
+- **Do not expose Fulcrum without TLS + firewall rules** if it leaves localhost — it exposes rich indexing APIs.
+- Prefer binding **`rpcbind`** / Fulcrum **`tcp`** / **`ssl`** to **`127.0.0.1`** unless Phoenix runs on another host; if split across machines, restrict sources to your private network only.
+- Generate strong passwords: e.g. **`openssl rand -hex 32`** for **`rpcpassword`**.
+- For TLS to Fulcrum, use a proper certificate for private LAN use or public PKI as appropriate.
+- Run **`bitcoind`** / Fulcrum as **non-root** dedicated users with minimal filesystem permissions where practical.
+
+### Esplora mode (default)
+
+If you **do not** run a full stack, **`DATA_SOURCE=esplora`** (default) uses a public or private Esplora-compatible HTTP API (**`ESPLORA_BASE_URL`**) and **does not** start **`FulcrumClient`**. This is the lowest-friction setup. Running your own node is recommended when you need **full sovereignty** over chain data and indexing, at the cost of hardware, sync time, and ongoing maintenance.
 
 ---
 
@@ -100,6 +229,9 @@ Open **`http://127.0.0.1:4000/`** — no path prefix unless you set **`PHX_PATH`
 ### ExUnit (`mix test`)
 
 - **`test/bitcoinex_explorer/esplora_test.exs`** — **`BitcoinexExplorer.Esplora`** with [**Bypass**](https://hex.pm/packages/bypass) (no real HTTP).
+- **`test/bitcoinex_explorer/bitcoin_core_rpc_test.exs`**, **`bitcoin_rpc_normalize_test.exs`**, **`bitcoin_rpc_test.exs`** — JSON-RPC parsing/normalization and **`BitcoinexExplorer.BitcoinRPC`** pipelines (Bypass).
+- **`test/bitcoinex_explorer/fulcrum_client_test.exs`**, **`scripthash_test.exs`** — Fulcrum TCP client + Electrum scripthash derivation (no outbound network).
+- **`test/bitcoinex_explorer/data_source_test.exs`**, **`application_test.exs`** — backend selection wiring / supervision expectations.
 - **`test/bitcoinex_explorer/search_test.exs`** — **`BitcoinexExplorer.Search`** routing classifications.
 
 Integration tests in **`test/bitcoinex_explorer_web/live/explorer_live_test.exs`** exercise **`ExplorerLive`** without a browser:
@@ -140,7 +272,8 @@ Playwright **`baseURL`** must include the mount path when the app is served unde
 
 ## Known limitations
 
-- Live chain views depend on the configured Esplora-compatible endpoint (**availability, rate limits, and fork/network choices are upstream concerns**).
+- Live chain views depend on the configured **`DataSource`** backend (**Esplora** availability/rate limits/network, or **your own** Core/Fulcrum health and sync).
+- **`DATA_SOURCE=rpc`**: address page **lifetime funded/spent totals** are **not** Esplora-identical yet (balance + history work); see **Address page totals (`DATA_SOURCE=rpc`)** under self-hosting—aggregation/caching is **planned**.
 - Legacy Base58 decoding is best-effort classification using version-byte prefixes.
 - PSBT **unsigned transaction ID** is not shown as a real txid — unsigned PSBTs do not have a valid txid until finalized.
 - Auto-detection assumes **BOLT11** strings start with **`ln`** and **PSBT** base64 starts with the standard magic; unusual encodings may need future heuristics.

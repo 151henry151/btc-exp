@@ -23,6 +23,40 @@ defmodule BitcoinexExplorer.EsploraTest do
     assert {:ok, [%{"id" => "abc"}]} = BitcoinexExplorer.Esplora.blocks()
   end
 
+  test "recent_blocks follows /blocks then /blocks/<height> until limit", %{bypass: bypass} do
+    batch1 =
+      for h <- 20..11//-1,
+          do: %{"id" => String.pad_leading(Integer.to_string(h), 64, "a"), "height" => h}
+
+    batch2 =
+      for h <- 10..6//-1,
+          do: %{"id" => String.pad_leading(Integer.to_string(h), 64, "b"), "height" => h}
+
+    Bypass.expect(bypass, fn conn ->
+      conn = Plug.Conn.put_resp_content_type(conn, "application/json")
+
+      case conn.request_path do
+        "/blocks" ->
+          Plug.Conn.resp(conn, 200, Jason.encode!(batch1))
+
+        "/blocks/10" ->
+          Plug.Conn.resp(conn, 200, Jason.encode!(batch2))
+
+        other ->
+          Plug.Conn.resp(conn, 404, "unexpected #{other}")
+      end
+    end)
+
+    assert {:ok, merged} = BitcoinexExplorer.Esplora.recent_blocks(15)
+    assert length(merged) == 15
+    assert List.first(merged)["height"] == 20
+    assert List.last(merged)["height"] == 6
+
+    assert {:ok, twelve} = BitcoinexExplorer.Esplora.recent_blocks(12)
+    assert length(twelve) == 12
+    assert List.last(twelve)["height"] == 9
+  end
+
   test "404 maps to not_found", %{bypass: bypass} do
     Bypass.expect(bypass, "GET", "/tx/nope", fn conn ->
       Plug.Conn.resp(conn, 404, "")

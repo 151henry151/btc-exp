@@ -7,15 +7,20 @@ defmodule BitcoinexExplorer.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
+    base = [
       BitcoinexExplorerWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:bitcoinex_explorer, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: BitcoinexExplorer.PubSub},
-      # Start a worker by calling: BitcoinexExplorer.Worker.start_link(arg)
-      # {BitcoinexExplorer.Worker, arg},
-      # Start to serve requests, typically the last entry
-      BitcoinexExplorerWeb.Endpoint
+      {Phoenix.PubSub, name: BitcoinexExplorer.PubSub}
     ]
+
+    fulcrum =
+      if Application.get_env(:bitcoinex_explorer, :start_fulcrum_client, false) do
+        [{BitcoinexExplorer.FulcrumClient, []}]
+      else
+        []
+      end
+
+    children = base ++ fulcrum ++ [BitcoinexExplorerWeb.Endpoint]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

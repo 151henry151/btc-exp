@@ -2,7 +2,11 @@ defmodule BitcoinexExplorer.Esplora do
   @moduledoc """
   Esplora-compatible HTTP API (defaults to Blockstream public API).
   All functions return `{:ok, term()} | {:error, term()}`.
+
+  Implements `BitcoinexExplorer.DataSource`; LiveView should call `DataSource.impl()` rather than this module directly.
   """
+
+  @behaviour BitcoinexExplorer.DataSource
 
   alias Tesla.Env
 
@@ -68,6 +72,52 @@ defmodule BitcoinexExplorer.Esplora do
   @spec blocks() :: {:ok, list()} | {:error, term()}
   def blocks, do: get_json("/blocks")
 
+  @doc """
+  Fetches up to `limit` recent blocks by paging `GET /blocks` then `GET /blocks/<height>` (Esplora returns 10 per page).
+  On a partial failure after some pages succeeded, returns `{:ok, accumulated}`.
+  """
+  @spec recent_blocks(pos_integer()) :: {:ok, list()} | {:error, term()}
+  def recent_blocks(limit \\ 100) when is_integer(limit) and limit > 0 do
+    case blocks() do
+      {:ok, batch} when is_list(batch) and batch != [] ->
+        fetch_more_recent_batches(batch, limit, 0)
+
+      {:ok, []} ->
+        {:ok, []}
+
+      err ->
+        err
+    end
+  end
+
+  defp fetch_more_recent_batches(acc, limit, _depth) when length(acc) >= limit do
+    {:ok, Enum.take(acc, limit)}
+  end
+
+  defp fetch_more_recent_batches(acc, _limit, depth) when depth >= 30 do
+    {:ok, acc}
+  end
+
+  defp fetch_more_recent_batches(acc, limit, depth) do
+    last = List.last(acc)
+    next_start = Map.get(last, "height", 0) - 1
+
+    if next_start < 0 do
+      {:ok, acc}
+    else
+      case get_json("/blocks/#{next_start}") do
+        {:ok, batch} when is_list(batch) and batch != [] ->
+          fetch_more_recent_batches(acc ++ batch, limit, depth + 1)
+
+        {:ok, _} ->
+          {:ok, acc}
+
+        {:error, _} ->
+          if acc == [], do: {:error, :not_found}, else: {:ok, acc}
+      end
+    end
+  end
+
   @spec block(binary()) :: {:ok, map()} | {:error, term()}
   def block(hash) when is_binary(hash), do: get_json("/block/#{hash}")
 
@@ -126,4 +176,41 @@ defmodule BitcoinexExplorer.Esplora do
 
   @spec mempool_recent() :: {:ok, list()} | {:error, term()}
   def mempool_recent, do: get_json("/mempool/recent")
+
+  # ——— DataSource callbacks ———
+
+  @impl true
+  def get_recent_blocks(count), do: recent_blocks(count)
+
+  @impl true
+  def get_block(hash), do: block(hash)
+
+  @impl true
+  def get_block_by_height(height) when is_integer(height) and height >= 0 do
+    case block_hash_at_height(height) do
+      {:ok, hash} -> block(hash)
+      err -> err
+    end
+  end
+
+  @impl true
+  def get_block_hash_at_height(height), do: block_hash_at_height(height)
+
+  @impl true
+  def get_block_txs(hash, start_index), do: block_txs(hash, start_index)
+
+  @impl true
+  def get_tx(txid), do: transaction(txid)
+
+  @impl true
+  def get_address(addr), do: address(addr)
+
+  @impl true
+  def get_address_txs(addr, last_seen_txid), do: address_txs(addr, last_seen_txid)
+
+  @impl true
+  def get_mempool(), do: mempool()
+
+  @impl true
+  def get_fee_estimates(), do: fee_estimates()
 end

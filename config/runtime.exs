@@ -1,5 +1,65 @@
 import Config
 
+data_source_raw =
+  System.get_env("DATA_SOURCE", "esplora")
+  |> String.trim()
+  |> String.downcase()
+
+{data_source_module, start_fulcrum_client} =
+  case data_source_raw do
+    "esplora" ->
+      {BitcoinexExplorer.Esplora, false}
+
+    "rpc" ->
+      {BitcoinexExplorer.BitcoinRPC, true}
+
+    other ->
+      raise ArgumentError,
+            "Invalid DATA_SOURCE=#{inspect(other)}. Use \"esplora\" or \"rpc\"."
+  end
+
+rpc_url = System.get_env("BITCOIN_RPC_URL", "http://127.0.0.1:8332")
+rpc_user = System.get_env("BITCOIN_RPC_USER", "")
+rpc_pass = System.get_env("BITCOIN_RPC_PASS", "")
+
+fulcrum_host = System.get_env("FULCRUM_HOST", "127.0.0.1")
+
+fulcrum_port =
+  System.get_env("FULCRUM_PORT", "50001")
+  |> String.trim()
+  |> case do
+    "" -> 50001
+    p -> String.to_integer(p)
+  end
+
+fulcrum_ssl =
+  System.get_env("FULCRUM_SSL", "false")
+  |> String.trim()
+  |> String.downcase()
+  |> Kernel.in(~w(1 true yes))
+
+if data_source_module == BitcoinexExplorer.BitcoinRPC and config_env() == :prod do
+  for {var, val} <- [{"BITCOIN_RPC_URL", rpc_url}, {"BITCOIN_RPC_USER", rpc_user}, {"BITCOIN_RPC_PASS", rpc_pass}] do
+    if val == nil or String.trim(to_string(val)) == "" do
+      raise ArgumentError, "#{var} is required when DATA_SOURCE=rpc"
+    end
+  end
+end
+
+config :bitcoinex_explorer,
+  data_source_module: data_source_module,
+  start_fulcrum_client: start_fulcrum_client,
+  bitcoin_rpc_url: rpc_url,
+  bitcoin_rpc_user: rpc_user,
+  bitcoin_rpc_pass: rpc_pass,
+  fulcrum_host: fulcrum_host,
+  fulcrum_port: fulcrum_port,
+  fulcrum_ssl: fulcrum_ssl,
+  fulcrum_ssl_opts: [
+    verify: :verify_none,
+    server_name_indication: :disable
+  ]
+
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
 # system starts, so it is typically used to load production configuration
@@ -22,6 +82,8 @@ end
 
 config :bitcoinex_explorer,
   esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api")
+
+# Note: data_source_module / Fulcrum / Bitcoin RPC env vars are applied earlier in this file.
 
 if config_env() == :prod do
   # The secret key base is used to sign/encrypt cookies and other secrets.

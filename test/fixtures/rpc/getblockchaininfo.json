@@ -1,0 +1,12 @@
+{
+  "chain": "main",
+  "blocks": 860000,
+  "headers": 860000,
+  "bestblockhash": "00000000000000000002c00000000000000000000000000000000000000000000",
+  "difficulty": 83291274957863.06,
+  "initialblockdownload": false,
+  "chainwork": "0000000000000000000000000000000000000000860000000000000000000000",
+  "size_on_disk": 650000000000,
+  "pruned": false,
+  "warnings": []
+}

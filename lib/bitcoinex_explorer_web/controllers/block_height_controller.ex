@@ -1,12 +1,12 @@
 defmodule BitcoinexExplorerWeb.BlockHeightController do
   use BitcoinexExplorerWeb, :controller
 
-  alias BitcoinexExplorer.Esplora
+  alias BitcoinexExplorer.DataSource
 
   def redirect_to_block(conn, %{"height" => height_str}) do
     case Integer.parse(height_str) do
       {height, ""} when height >= 0 ->
-        case Esplora.block_hash_at_height(height) do
+        case DataSource.impl().get_block_hash_at_height(height) do
           {:ok, hash} ->
             redirect(conn, to: ~p"/block/#{hash}")
 
