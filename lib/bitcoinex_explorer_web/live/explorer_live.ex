@@ -603,16 +603,56 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
         <form
           phx-submit="search"
+          id="nav-search-form"
           class="mx-auto flex min-w-[200px] flex-1 items-center gap-2 md:max-w-xl"
         >
-          <input
-            type="text"
-            name="q"
-            value={@nav_input}
-            placeholder="Txid, block hash, height, address, invoice, PSBT…"
-            autocomplete="off"
-            class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#f7931a] focus:outline-none focus:ring-1 focus:ring-[#f7931a]"
-          />
+          <div class="relative min-w-0 flex-1">
+            <input
+              id="nav-search-q"
+              type="text"
+              name="q"
+              value={@nav_input}
+              placeholder="Txid, block hash, height, address, invoice, PSBT…"
+              autocomplete="off"
+              class="w-full rounded-lg border border-zinc-700 bg-zinc-950 py-2 pr-11 pl-3 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#f7931a] focus:outline-none focus:ring-1 focus:ring-[#f7931a] md:pr-3"
+            />
+            <div
+              id="nav-qr-scan"
+              phx-hook="QrScan"
+              phx-update="ignore"
+              data-target-selector="#nav-search-q"
+              data-after-scan="submit-search"
+              class="absolute top-1/2 right-2 z-10 -translate-y-1/2 md:hidden"
+            >
+              <button
+                type="button"
+                data-qr-trigger
+                aria-label="Scan QR code"
+                class="rounded-md border border-zinc-600 bg-zinc-900 p-2 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
           <button
             type="submit"
             class="rounded-lg bg-[#f7931a] px-3 py-2 text-sm font-medium text-black hover:bg-[#ffa433]"
@@ -726,13 +766,52 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         </p>
         <form id="decode-form" phx-change="decode" class="space-y-3">
           <label class="text-sm font-medium text-zinc-300">Input</label>
-          <textarea
-            name="input"
-            rows="5"
-            phx-debounce="300"
-            class="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 font-mono text-sm leading-6 text-zinc-100 outline-none ring-[#f7931a] placeholder:text-zinc-500 focus:ring-1"
-            placeholder="bc1q…, lnbc…, cHNidP8BA…"
-          ><%= @input %></textarea>
+          <div class="relative">
+            <textarea
+              id="decode-input"
+              name="input"
+              rows="5"
+              phx-debounce="300"
+              class="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 pr-12 font-mono text-sm leading-6 text-zinc-100 outline-none ring-[#f7931a] placeholder:text-zinc-500 focus:ring-1 md:p-3"
+              placeholder="bc1q…, lnbc…, cHNidP8BA…"
+            ><%= @input %></textarea>
+            <div
+              id="decode-qr-scan"
+              phx-hook="QrScan"
+              phx-update="ignore"
+              data-target-selector="#decode-input"
+              data-after-scan="decode-change"
+              class="absolute top-3 right-3 z-10 md:hidden"
+            >
+              <button
+                type="button"
+                data-qr-trigger
+                aria-label="Scan QR code"
+                class="rounded-md border border-zinc-600 bg-zinc-900 p-2 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  class="h-5 w-5"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  />
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
         </form>
 
         <p

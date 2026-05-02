@@ -5,6 +5,10 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.9] - 2026-04-30
+
+- Add mobile-only (**`md:hidden`**) **Scan QR code** camera buttons on the nav search field and **Decode locally** textarea via **`QrScan`** LiveView hook (**jsqr** + **`getUserMedia`**); normalize **`bitcoin:`** / **`lightning:`** URI payloads before filling the field; submit the search form after a successful nav scan.
+
 ## [0.4.8] - 2026-04-30
 
 - Map Esplora **`scriptpubkey_type`** **`op_return`** to chart bucket **`op_return`** and **`OP_RETURN`** flow-node labels in **`OutputClassifier`** / **`TxFlow`**.

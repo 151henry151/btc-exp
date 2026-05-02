@@ -1,4 +1,5 @@
 import * as d3 from "d3"
+import jsQR from "jsqr"
 import QRCode from "qrcode"
 
 const COLORS = {
@@ -289,9 +290,210 @@ export const AddressQr = {
   },
 }
 
+/** Strip bitcoin:/lightning: wrappers common in wallet QR codes. */
+function normalizeQrPayload(text) {
+  const t = String(text || "").trim()
+  if (!t) return t
+  const lower = t.toLowerCase()
+  if (lower.startsWith("bitcoin:")) {
+    return t.slice("bitcoin:".length).split(/[?#]/)[0].trim()
+  }
+  if (lower.startsWith("lightning:")) {
+    return t.slice("lightning:".length).split(/[?#]/)[0].trim()
+  }
+  return t
+}
+
+function applyDecodedValue(input, rawText) {
+  const normalized = normalizeQrPayload(rawText)
+  input.focus()
+  input.value = normalized
+  input.dispatchEvent(new Event("input", { bubbles: true }))
+}
+
+export const QrScan = {
+  mounted() {
+    this.targetSelector = this.el.dataset.targetSelector || ""
+    this.afterScan = this.el.dataset.afterScan || "decode-change"
+    this.btn = this.el.querySelector("[data-qr-trigger]")
+    this._onTrigger = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      this.openScanner()
+    }
+    this.btn?.addEventListener("click", this._onTrigger)
+    this.stream = null
+    this.rafId = null
+    this.overlay = null
+    this.video = null
+    this.canvas = null
+    this.active = false
+  },
+  destroyed() {
+    this.btn?.removeEventListener("click", this._onTrigger)
+    this.closeScanner()
+  },
+  updated() {},
+  closeScanner() {
+    this.active = false
+    if (this.rafId != null) {
+      cancelAnimationFrame(this.rafId)
+      this.rafId = null
+    }
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop())
+      this.stream = null
+    }
+    if (this.overlay?.parentNode) {
+      this.overlay.parentNode.removeChild(this.overlay)
+    }
+    this.overlay = null
+    this.video = null
+    this.canvas = null
+  },
+  openScanner() {
+    if (!this.targetSelector || !navigator.mediaDevices?.getUserMedia) {
+      window.alert("Camera scanning is not supported in this browser.")
+      return
+    }
+
+    const input = document.querySelector(this.targetSelector)
+    if (!input) return
+
+    this.closeScanner()
+    this.active = true
+
+    const overlay = document.createElement("div")
+    overlay.setAttribute("role", "dialog")
+    overlay.setAttribute("aria-modal", "true")
+    overlay.setAttribute("aria-label", "Scan QR code")
+    Object.assign(overlay.style, {
+      position: "fixed",
+      inset: "0",
+      zIndex: "100",
+      background: "rgba(0,0,0,0.92)",
+      display: "flex",
+      flexDirection: "column",
+      padding: "12px",
+      boxSizing: "border-box",
+    })
+
+    const bar = document.createElement("div")
+    Object.assign(bar.style, {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: "10px",
+      gap: "8px",
+    })
+
+    const title = document.createElement("div")
+    title.textContent = "Scan QR code"
+    Object.assign(title.style, { color: "#fafafa", fontSize: "16px", fontWeight: "600" })
+
+    const cancelBtn = document.createElement("button")
+    cancelBtn.type = "button"
+    cancelBtn.textContent = "Cancel"
+    Object.assign(cancelBtn.style, {
+      padding: "8px 14px",
+      borderRadius: "8px",
+      border: "1px solid #52525b",
+      background: "#27272a",
+      color: "#fafafa",
+      fontSize: "14px",
+      cursor: "pointer",
+    })
+    cancelBtn.addEventListener("click", () => this.closeScanner())
+
+    bar.appendChild(title)
+    bar.appendChild(cancelBtn)
+
+    const errEl = document.createElement("p")
+    Object.assign(errEl.style, {
+      color: "#fdba74",
+      fontSize: "13px",
+      margin: "0 0 8px 0",
+      minHeight: "1.2em",
+    })
+
+    const video = document.createElement("video")
+    video.setAttribute("playsinline", "")
+    video.playsInline = true
+    video.muted = true
+    Object.assign(video.style, {
+      flex: "1",
+      width: "100%",
+      minHeight: "0",
+      borderRadius: "12px",
+      border: "1px solid #3f3f46",
+      objectFit: "cover",
+      background: "#000",
+    })
+
+    const canvas = document.createElement("canvas")
+
+    overlay.appendChild(bar)
+    overlay.appendChild(errEl)
+    overlay.appendChild(video)
+    document.body.appendChild(overlay)
+
+    this.overlay = overlay
+    this.video = video
+    this.canvas = canvas
+
+    navigator.mediaDevices
+      .getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false,
+      })
+      .then((stream) => {
+        if (!this.active) {
+          stream.getTracks().forEach((t) => t.stop())
+          return
+        }
+        this.stream = stream
+        video.srcObject = stream
+        video.play().catch(() => {})
+
+        const ctx = canvas.getContext("2d", { willReadFrequently: true })
+        const tick = () => {
+          if (!this.active || !this.video || !ctx) return
+
+          if (video.readyState >= video.HAVE_CURRENT_DATA) {
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: "attemptBoth",
+            })
+            if (code?.data) {
+              const text = String(code.data).trim()
+              if (text) {
+                applyDecodedValue(input, text)
+                this.closeScanner()
+                if (this.afterScan === "submit-search") {
+                  const form = input.form
+                  if (form) form.requestSubmit()
+                }
+                return
+              }
+            }
+          }
+          this.rafId = requestAnimationFrame(tick)
+        }
+        this.rafId = requestAnimationFrame(tick)
+      })
+      .catch(() => {
+        errEl.textContent = "Could not access the camera. Check permissions and try again."
+      })
+  },
+}
+
 export default {
   ScriptTypeChart,
   TxFlowGraph,
   RelativeTime,
   AddressQr,
+  QrScan,
 }

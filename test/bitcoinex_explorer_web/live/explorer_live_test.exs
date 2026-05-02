@@ -11,6 +11,17 @@ defmodule BitcoinexExplorerWeb.ExplorerLiveTest do
     refute html =~ "phx-value-tab"
   end
 
+  test "home includes mobile QR scan hooks for nav search and decode input", %{conn: conn} do
+    {:ok, _view, html} = live(conn, ~p"/")
+
+    assert html =~ ~s(phx-hook="QrScan")
+    assert html =~ "nav-qr-scan"
+    assert html =~ "decode-qr-scan"
+    assert html =~ ~s(data-after-scan="submit-search")
+    assert html =~ ~s(data-after-scan="decode-change")
+    assert html =~ ~s(aria-label="Scan QR code")
+  end
+
   test "auto-detects Lightning invoice by ln prefix", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
 
