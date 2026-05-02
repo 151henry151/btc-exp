@@ -76,4 +76,26 @@ defmodule BitcoinexExplorer.EsploraCacheTest do
 
     assert_receive :second
   end
+
+  test "get_or_fetch runs fun only once for concurrent waiters (single-flight)" do
+    Application.put_env(:bitcoinex_explorer, :esplora_cache_ttl_ms, 60_000)
+    gate = :counters.new(1, [:atomics])
+
+    fun = fn ->
+      :counters.add(gate, 1, 1)
+      Process.sleep(120)
+      {:ok, :shared_payload}
+    end
+
+    tasks =
+      for _ <- 1..15 do
+        Task.async(fn ->
+          BitcoinexExplorer.EsploraCache.get_or_fetch(:single_flight_key, fun)
+        end)
+      end
+
+    results = Task.await_many(tasks, 10_000)
+    assert Enum.all?(results, &(&1 == {:ok, :shared_payload}))
+    assert :counters.get(gate, 1) == 1
+  end
 end

@@ -87,7 +87,7 @@ end
 esplora_cache_ttl_ms =
   case System.get_env("ESPLORA_CACHE_TTL_MS", "") |> String.trim() do
     "" ->
-      if config_env() == :prod, do: 45_000, else: 0
+      if config_env() == :prod, do: 60_000, else: 0
 
     s ->
       case Integer.parse(s) do
@@ -99,8 +99,8 @@ esplora_cache_ttl_ms =
 esplora_min_request_interval_ms =
   case System.get_env("ESPLORA_MIN_REQUEST_INTERVAL_MS", "") |> String.trim() do
     "" ->
-      # Reference Esplora nginx uses ~5 req/s for `/api/`; ~300 ms between starts keeps a margin.
-      if config_env() == :prod, do: 300, else: 0
+      # Reference Esplora nginx uses ~5 req/s for `/api/`; ~450 ms between starts stays under burst limits.
+      if config_env() == :prod, do: 450, else: 0
 
     s ->
       case Integer.parse(s) do

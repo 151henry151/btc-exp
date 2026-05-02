@@ -5,6 +5,19 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.12] - 2026-05-01
+
+- Show **About** in the header only from **`md`** up; on smaller screens link to the static landing page from the footer nav instead.
+
+## [0.4.11] - 2026-05-01
+
+- Place mobile QR scan controls **beside** the nav search and decode fields (not inside the inputs); use a shared **QR code** outline icon (Heroicons-style) in fixed **40×40** tap targets.
+
+## [0.4.10] - 2026-05-01
+
+- Single-flight concurrent **`EsploraCache.get_or_fetch`** misses so many dashboard viewers do not each run full **`recent_blocks`** pagination against anonymous Esplora limits.
+- Raise prod defaults **`ESPLORA_CACHE_TTL_MS`** to **60s** and **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** to **450** ms; load **50** recent blocks on the home dashboard (was **100**).
+
 ## [0.4.9] - 2026-04-30
 
 - Add mobile-only (**`md:hidden`**) **Scan QR code** camera buttons on the nav search field and **Decode locally** textarea via **`QrScan`** LiveView hook (**jsqr** + **`getUserMedia`**); normalize **`bitcoin:`** / **`lightning:`** URI payloads before filling the field; submit the search form after a successful nav scan.

@@ -153,7 +153,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp fetch_home_data(socket) do
     socket =
-      case ds().get_recent_blocks(100) do
+      case ds().get_recent_blocks(50) do
         {:ok, list} when is_list(list) ->
           tip =
             case list do
@@ -494,7 +494,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       if socket.assigns.live_action != :home do
         socket
       else
-        case ds().get_recent_blocks(100) do
+        case ds().get_recent_blocks(50) do
           {:ok, list} when is_list(list) ->
             tip =
               case list do
@@ -579,6 +579,13 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             hromp.com
           </.link>
           <span class="text-zinc-600">·</span>
+          <a
+            href="https://hromp.com/bitcoinex-explorer/"
+            class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline md:hidden"
+          >
+            About
+          </a>
+          <span class="text-zinc-600 md:hidden">·</span>
           <.link
             href="https://github.com/151henry151/bitcoinex-explorer"
             class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline"
@@ -606,52 +613,31 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           id="nav-search-form"
           class="mx-auto flex min-w-[200px] flex-1 items-center gap-2 md:max-w-xl"
         >
-          <div class="relative min-w-0 flex-1">
-            <input
-              id="nav-search-q"
-              type="text"
-              name="q"
-              value={@nav_input}
-              placeholder="Txid, block hash, height, address, invoice, PSBT…"
-              autocomplete="off"
-              class="w-full rounded-lg border border-zinc-700 bg-zinc-950 py-2 pr-11 pl-3 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#f7931a] focus:outline-none focus:ring-1 focus:ring-[#f7931a] md:pr-3"
-            />
-            <div
-              id="nav-qr-scan"
-              phx-hook="QrScan"
-              phx-update="ignore"
-              data-target-selector="#nav-search-q"
-              data-after-scan="submit-search"
-              class="absolute top-1/2 right-2 z-10 -translate-y-1/2 md:hidden"
+          <input
+            id="nav-search-q"
+            type="text"
+            name="q"
+            value={@nav_input}
+            placeholder="Txid, block hash, height, address, invoice, PSBT…"
+            autocomplete="off"
+            class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#f7931a] focus:outline-none focus:ring-1 focus:ring-[#f7931a]"
+          />
+          <div
+            id="nav-qr-scan"
+            phx-hook="QrScan"
+            phx-update="ignore"
+            data-target-selector="#nav-search-q"
+            data-after-scan="submit-search"
+            class="shrink-0 md:hidden"
+          >
+            <button
+              type="button"
+              data-qr-trigger
+              aria-label="Scan QR code"
+              class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-600 bg-zinc-900 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
             >
-              <button
-                type="button"
-                data-qr-trigger
-                aria-label="Scan QR code"
-                class="rounded-md border border-zinc-600 bg-zinc-900 p-2 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  class="h-5 w-5"
-                  aria-hidden="true"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </button>
-            </div>
+              <.qr_scan_icon />
+            </button>
           </div>
           <button
             type="submit"
@@ -663,7 +649,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
         <a
           href="https://hromp.com/bitcoinex-explorer/"
-          class="ml-auto shrink-0 text-sm text-zinc-400 hover:text-[#f7931a]"
+          class="ml-auto hidden shrink-0 text-sm text-zinc-400 hover:text-[#f7931a] md:block"
         >
           About
         </a>
@@ -766,13 +752,13 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         </p>
         <form id="decode-form" phx-change="decode" class="space-y-3">
           <label class="text-sm font-medium text-zinc-300">Input</label>
-          <div class="relative">
+          <div class="flex gap-2 items-start">
             <textarea
               id="decode-input"
               name="input"
               rows="5"
               phx-debounce="300"
-              class="w-full rounded-xl border border-zinc-700 bg-zinc-950 p-3 pr-12 font-mono text-sm leading-6 text-zinc-100 outline-none ring-[#f7931a] placeholder:text-zinc-500 focus:ring-1 md:p-3"
+              class="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 p-3 font-mono text-sm leading-6 text-zinc-100 outline-none ring-[#f7931a] placeholder:text-zinc-500 focus:ring-1"
               placeholder="bc1q…, lnbc…, cHNidP8BA…"
             ><%= @input %></textarea>
             <div
@@ -781,34 +767,15 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               phx-update="ignore"
               data-target-selector="#decode-input"
               data-after-scan="decode-change"
-              class="absolute top-3 right-3 z-10 md:hidden"
+              class="shrink-0 md:hidden"
             >
               <button
                 type="button"
                 data-qr-trigger
                 aria-label="Scan QR code"
-                class="rounded-md border border-zinc-600 bg-zinc-900 p-2 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-600 bg-zinc-900 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  class="h-5 w-5"
-                  aria-hidden="true"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                  />
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
+                <.qr_scan_icon />
               </button>
             </div>
           </div>
@@ -1334,4 +1301,32 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   end
 
   defp fmt_unix(_), do: "—"
+
+  # Heroicons outline "qr-code" (24×24) — shared by mobile scan buttons.
+  defp qr_scan_icon(assigns) do
+    assigns = assign(assigns, :class, assigns[:class] || "h-5 w-5")
+
+    ~H"""
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke-width="1.5"
+      stroke="currentColor"
+      class={@class}
+      aria-hidden="true"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z"
+      />
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75zM16.5 19.5h.75v.75h-.75v-.75z"
+      />
+    </svg>
+    """
+  end
 end
