@@ -5,6 +5,25 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.14] - 2026-05-03
+
+- Run **`assign_async`** for address **UTXOs** from **`load_address/2`** when connected so the async task always tracks the same load path as chain lookup.
+- Split **home dashboard** Esplora fetch across **`handle_info`** steps (plus defer initial fetch) so **`phx-change`** decode is not blocked behind long **`get_recent_blocks`** calls.
+- **`LightningGraph.summary_stats/1`**: unwrap **`statistics/latest`** **`"latest"`** object so channel/node counts and capacity match mempool.space JSON.
+- **`FeeHeatmap`**: pad SVG, **`overflow: visible`**, and edge **`text-anchor`** so fee and time labels are not clipped.
+- **`LightningGraph`** hook: **`simulation.on("tick")`** circle positions; tooltip **`div`** positioned with **`d3.pointer`** inside **`relative`** **`#lightning-graph`**.
+- **Block dissector**: **`dissector_field_style/1`** legend, colored field rows, hex spans aligned to fields, orange border on the toggle when open.
+- **Playwright e2e**: **`decodeSection`** helpers scoped to **Decode locally** (avoid mempool **`dl`**); **`#decode-result`** / **`#decode-error`** hooks where applicable.
+
+## [0.4.13] - 2026-05-02
+
+- Preserve **`dissector_open`** and **`selected_field`** when **`load_block`** reloads the **same** block map so **`handle_params`** / reconnect does not close the anatomy panel after **`toggle_dissector`**.
+- Add **`FeeHeatmap`** hook and **recent mempool** table on the home dashboard; poll **`mempool_recent`** on the existing mempool interval (**120s**) alongside mempool stats.
+- Add **`address_utxos`** / **`UtxoEnrichment`** with **`assign_async`** and an **Unspent outputs** section on the address page.
+- Add **`/channels`** (**Lightning Network** stats + **`LightningGraph`** D3 hook), **`ChannelsCache`** (mempool.space Lightning API), **`MEMPOOL_BASE_URL`**, and a **Channels** nav link.
+- Add block header **`BlockHeader`** module and **Dissect this block** anatomy panel on block pages.
+- Document **`MEMPOOL_BASE_URL`** in **`.env.production.example`**; run **`mix assets.deploy`** for hook releases.
+
 ## [0.4.12] - 2026-05-01
 
 - Show **About** in the header only from **`md`** up; on smaller screens link to the static landing page from the footer nav instead.

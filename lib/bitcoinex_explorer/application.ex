@@ -32,7 +32,15 @@ defmodule BitcoinexExplorer.Application do
         []
       end
 
-    children = base ++ fulcrum ++ esplora_http_gate ++ [BitcoinexExplorerWeb.Endpoint]
+    channels_cache =
+      if Application.get_env(:bitcoinex_explorer, :start_channels_cache, false) do
+        [{BitcoinexExplorer.ChannelsCache, []}]
+      else
+        []
+      end
+
+    children =
+      base ++ fulcrum ++ esplora_http_gate ++ channels_cache ++ [BitcoinexExplorerWeb.Endpoint]
 
     # See https://hexdocs.pm/elixir/Supervisor.html
     # for other strategies and supported options

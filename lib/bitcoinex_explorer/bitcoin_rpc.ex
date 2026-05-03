@@ -289,4 +289,10 @@ defmodule BitcoinexExplorer.BitcoinRPC do
 
     {:ok, BitcoinRpcNormalize.fee_estimates_from_core(Map.new(results))}
   end
+
+  @impl true
+  def mempool_recent, do: {:error, :not_implemented}
+
+  @impl true
+  def address_utxos(_addr), do: {:error, :not_implemented}
 end

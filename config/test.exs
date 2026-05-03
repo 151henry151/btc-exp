@@ -19,3 +19,5 @@ config :phoenix_live_view,
 
 # Fast Esplora 429 retry tests (see Esplora.do_get_* retry chain).
 config :bitcoinex_explorer, esplora_429_retry_delay_ms: 15
+
+config :bitcoinex_explorer, start_channels_cache: false

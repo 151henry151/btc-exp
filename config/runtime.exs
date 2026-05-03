@@ -109,10 +109,20 @@ esplora_min_request_interval_ms =
       end
   end
 
+mempool_base_url =
+  System.get_env("MEMPOOL_BASE_URL", "https://mempool.space")
+  |> String.trim()
+  |> String.trim_trailing("/")
+
 config :bitcoinex_explorer,
   esplora_base_url: System.get_env("ESPLORA_BASE_URL", "https://blockstream.info/api"),
   esplora_cache_ttl_ms: esplora_cache_ttl_ms,
-  esplora_min_request_interval_ms: esplora_min_request_interval_ms
+  esplora_min_request_interval_ms: esplora_min_request_interval_ms,
+  mempool_base_url: mempool_base_url
+
+if config_env() == :prod do
+  config :bitcoinex_explorer, start_channels_cache: true
+end
 
 case System.get_env("ESPLORA_429_RETRY_DELAY_MS", "") |> String.trim() do
   "" ->

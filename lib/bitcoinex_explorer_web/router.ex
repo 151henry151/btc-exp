@@ -25,6 +25,7 @@ defmodule BitcoinexExplorerWeb.Router do
       live "/block/:hash", ExplorerLive, :block
       live "/tx/:txid", ExplorerLive, :tx
       live "/address/:address", ExplorerLive, :address
+      live "/channels", ExplorerLive, :channels
     end
   end
 

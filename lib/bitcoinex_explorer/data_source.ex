@@ -100,4 +100,15 @@ defmodule BitcoinexExplorer.DataSource do
 
   @callback get_fee_estimates() ::
               {:ok, fee_estimates_map()} | {:error, term()}
+
+  @doc """
+  Recent mempool transactions (Esplora: `GET /mempool/recent`). Ephemeral — do not cache at dashboard level.
+  """
+  @callback mempool_recent() :: {:ok, [tx_map()]} | {:error, term()}
+
+  @doc """
+  Unspent outputs for an address (Esplora: `GET /address/:address/utxo`).
+  """
+  @callback address_utxos(address :: String.t()) ::
+              {:ok, [map()]} | {:error, term()}
 end

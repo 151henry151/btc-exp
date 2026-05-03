@@ -102,6 +102,57 @@ defmodule BitcoinexExplorer.EsploraTest do
     assert {:error, :not_found} = BitcoinexExplorer.Esplora.transaction("nope")
   end
 
+  test "mempool_recent returns list on 200", %{bypass: bypass} do
+    Bypass.expect(bypass, "GET", "/mempool/recent", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(
+        200,
+        Jason.encode!([%{"txid" => String.duplicate("a", 64), "fee" => 1000, "vsize" => 200}])
+      )
+    end)
+
+    assert {:ok, [%{"txid" => _}]} = BitcoinexExplorer.Esplora.mempool_recent()
+  end
+
+  test "mempool_recent maps 404 to not_found", %{bypass: bypass} do
+    Bypass.expect(bypass, "GET", "/mempool/recent", fn conn ->
+      Plug.Conn.resp(conn, 404, "")
+    end)
+
+    assert {:error, :not_found} = BitcoinexExplorer.Esplora.mempool_recent()
+  end
+
+  test "address_utxos returns list on 200", %{bypass: bypass} do
+    addr = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"
+
+    Bypass.expect(bypass, "GET", "/address/#{addr}/utxo", fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("application/json")
+      |> Plug.Conn.resp(
+        200,
+        Jason.encode!([
+          %{
+            "txid" => String.duplicate("a", 64),
+            "vout" => 0,
+            "status" => %{"confirmed" => true},
+            "value" => 1000
+          }
+        ])
+      )
+    end)
+
+    assert {:ok, [%{"txid" => _}]} = BitcoinexExplorer.Esplora.address_utxos(addr)
+  end
+
+  test "address_utxos maps 404 to not_found", %{bypass: bypass} do
+    Bypass.expect(bypass, "GET", "/address/bad/utxo", fn conn ->
+      Plug.Conn.resp(conn, 404, "")
+    end)
+
+    assert {:error, :not_found} = BitcoinexExplorer.Esplora.address_utxos("bad")
+  end
+
   test "block_height returns trimmed hash", %{bypass: bypass} do
     hash = String.duplicate("ab", 32)
 

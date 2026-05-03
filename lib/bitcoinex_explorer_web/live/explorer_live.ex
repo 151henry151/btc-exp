@@ -1,21 +1,28 @@
 defmodule BitcoinexExplorerWeb.ExplorerLive do
   use BitcoinexExplorerWeb, :live_view_root_only
 
-  import Phoenix.LiveView, only: [connected?: 1, redirect: 2, push_patch: 2]
+  import Phoenix.LiveView,
+    only: [connected?: 1, redirect: 2, push_patch: 2, assign_async: 3]
 
   alias BitcoinexExplorer.{
+    BlockHeader,
+    ChannelsCache,
     DataSource,
     Decode,
+    LightningGraph,
     OutputClassifier,
     Search,
     TxEnrichment,
-    TxFlow
+    TxFlow,
+    UtxoEnrichment
   }
+
+  alias Phoenix.LiveView.AsyncResult
 
   defp ds, do: DataSource.impl()
 
-  @poll_blocks_ms 15_000
-  @poll_mempool_ms 30_000
+  @poll_blocks_ms 60_000
+  @poll_mempool_ms 120_000
 
   @impl true
   def mount(_params, _session, socket) do
@@ -31,6 +38,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       |> assign(:tip_hash, nil)
       |> assign(:mempool_stats, nil)
       |> assign(:fee_estimates, nil)
+      |> assign(:mempool_recent, [])
       |> assign(:mempool_error, nil)
       |> assign(:blocks_error, nil)
       # block
@@ -42,6 +50,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       |> assign(:block_chart_data, "[]")
       |> assign(:block_error, nil)
       |> assign(:block_miner, nil)
+      |> assign(:block_header_hex, nil)
+      |> assign(:header_fields, [])
+      |> assign(:dissector_open, false)
+      |> assign(:selected_field, nil)
       # tx
       |> assign(:tx_data, nil)
       |> assign(:tx_enriched_vin, [])
@@ -57,6 +69,9 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       |> assign(:addr_txs_last, nil)
       |> assign(:addr_txs_has_more, false)
       |> assign(:poll_booted, false)
+      |> assign(:channel_stats, nil)
+      |> assign(:graph_json, "null")
+      |> assign(:utxos, AsyncResult.loading())
 
     {:ok, socket}
   end
@@ -78,6 +93,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         :tx -> Map.get(params, "txid", "")
         :block -> truncate_nav(Map.get(params, "hash", ""))
         :address -> Map.get(params, "address", "")
+        :channels -> ""
         _ -> ""
       end
 
@@ -94,8 +110,13 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             # (multiple paginated GETs) → fee estimates → mempool. Esplora limits by
             # request arrivals; avoid loading on the disconnected render so we do not
             # duplicate the full burst when the LiveView connects.
+            #
+            # Run after returning from handle_params so the LiveView process can handle
+            # phx-change (decode box, etc.) while Esplora HTTP is in flight — synchronous
+            # fetch_home_data/1 blocks all events until every GET completes.
             if connected?(socket) do
-              fetch_home_data(socket)
+              Process.send_after(self(), :fetch_home_data_async, 0)
+              socket
             else
               socket
             end
@@ -107,7 +128,14 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             socket |> load_tx(Map.get(params, "txid"))
 
           :address ->
-            socket |> load_address(Map.get(params, "address"))
+            load_address(socket, Map.get(params, "address"))
+
+          :channels ->
+            if connected?(socket) do
+              assign_channels_data(socket)
+            else
+              assign(socket, channel_stats: nil, graph_json: "null")
+            end
         end
       rescue
         e ->
@@ -146,46 +174,32 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp page_title_for(:address, %{"address" => a}),
     do: "Address #{truncate_middle(a, 16)} · Bitcoinex Explorer"
 
+  defp page_title_for(:channels, _), do: "Lightning Network Channels · Bitcoinex Explorer"
+
   defp page_title_for(_, _), do: "Bitcoinex Explorer"
 
   defp truncate_nav(h) when byte_size(h) > 18, do: String.slice(h, 0, 10) <> "…"
   defp truncate_nav(h), do: h
 
-  defp fetch_home_data(socket) do
-    socket =
-      case ds().get_recent_blocks(50) do
-        {:ok, list} when is_list(list) ->
-          tip =
-            case list do
-              [%{"id" => id} | _] -> id
-              _ -> nil
-            end
+  defp assign_channels_data(socket) do
+    if Application.get_env(:bitcoinex_explorer, :start_channels_cache, false) != true do
+      assign(socket, channel_stats: nil, graph_json: "null")
+    else
+      case ChannelsCache.get() do
+        {:ok, %{stats: stats, nodes: nodes}} ->
+          assign(socket,
+            channel_stats: LightningGraph.summary_stats(stats),
+            graph_json: Jason.encode!(LightningGraph.from_nodes(nodes))
+          )
 
-          assign(socket, blocks: list, tip_hash: tip, blocks_error: nil)
-
-        {:error, reason} ->
-          assign(socket, blocks_error: esplora_err(reason))
-      end
-
-    socket =
-      case ds().get_fee_estimates() do
-        {:ok, fees} ->
-          assign(socket, fee_estimates: fees)
+        :loading ->
+          Process.send_after(self(), :channels_retry, 2000)
+          assign(socket, channel_stats: nil, graph_json: "null")
 
         {:error, _} ->
-          assign(socket, fee_estimates: %{})
+          assign(socket, channel_stats: nil, graph_json: "null")
       end
-
-    socket =
-      case ds().get_mempool() do
-        {:ok, stats} ->
-          assign(socket, mempool_stats: stats, mempool_error: nil)
-
-        {:error, reason} ->
-          assign(socket, mempool_error: esplora_err(reason))
-      end
-
-    socket
+    end
   end
 
   defp load_block(socket, hash) when is_binary(hash) do
@@ -196,17 +210,51 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         {:ok, block} ->
           miner = guess_miner(block)
 
+          prior_id =
+            case socket.assigns[:block_data] do
+              %{"id" => id} when is_binary(id) -> id
+              _ -> nil
+            end
+
+          same_block = prior_id != nil && prior_id == block["id"]
+
+          {header_hex, header_fields} =
+            case BlockHeader.encode_from_block_map(block) do
+              {:ok, hex} ->
+                case BlockHeader.parse(hex) do
+                  {:ok, fields} -> {hex, fields}
+                  _ -> {nil, []}
+                end
+
+              _ ->
+                {nil, []}
+            end
+
           socket
           |> assign(:block_data, block)
           |> assign(:block_error, nil)
           |> assign(:block_miner, miner)
+          |> assign(:block_header_hex, header_hex)
+          |> assign(:header_fields, header_fields)
+          |> assign(
+            :dissector_open,
+            if(same_block, do: socket.assigns[:dissector_open] || false, else: false)
+          )
+          |> assign(
+            :selected_field,
+            if(same_block, do: socket.assigns[:selected_field], else: nil)
+          )
 
         {:error, :not_found} ->
           assign(socket,
             block_data: nil,
             block_error: "Block not found. Check the hash.",
             block_txs: [],
-            block_chart_data: "[]"
+            block_chart_data: "[]",
+            block_header_hex: nil,
+            header_fields: [],
+            dissector_open: false,
+            selected_field: nil
           )
 
         {:error, reason} ->
@@ -214,7 +262,11 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             block_data: nil,
             block_error: esplora_err(reason),
             block_txs: [],
-            block_chart_data: "[]"
+            block_chart_data: "[]",
+            block_header_hex: nil,
+            header_fields: [],
+            dissector_open: false,
+            selected_field: nil
           )
       end
 
@@ -326,18 +378,33 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           assign(socket, addr_info: nil, addr_error: esplora_err(reason))
       end
 
-    case ds().get_address_txs(addr, nil) do
-      {:ok, txs} when is_list(txs) ->
-        last = List.last(txs)
-        last_id = if last, do: Map.get(last, "txid"), else: nil
+    socket =
+      case ds().get_address_txs(addr, nil) do
+        {:ok, txs} when is_list(txs) ->
+          last = List.last(txs)
+          last_id = if last, do: Map.get(last, "txid"), else: nil
 
-        socket
-        |> assign(:addr_txs, txs)
-        |> assign(:addr_txs_last, last_id)
-        |> assign(:addr_txs_has_more, length(txs) >= 25)
+          socket
+          |> assign(:addr_txs, txs)
+          |> assign(:addr_txs_last, last_id)
+          |> assign(:addr_txs_has_more, length(txs) >= 25)
 
-      {:error, reason} ->
-        assign(socket, :addr_error, esplora_err(reason))
+        {:error, reason} ->
+          assign(socket, :addr_error, esplora_err(reason))
+      end
+
+    if connected?(socket) do
+      assign_async(socket, :utxos, fn ->
+        case ds().address_utxos(addr) do
+          {:ok, raw} ->
+            {:ok, %{utxos: UtxoEnrichment.enrich(raw, addr)}}
+
+          {:error, _} ->
+            {:ok, %{utxos: []}}
+        end
+      end)
+    else
+      socket
     end
   end
 
@@ -468,6 +535,16 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
      |> fetch_block_tx_page(String.downcase(hash), start)}
   end
 
+  def handle_event("toggle_dissector", _, socket) do
+    next = !(socket.assigns[:dissector_open] || false)
+    {:noreply, assign(socket, :dissector_open, next)}
+  end
+
+  def handle_event("select_field", %{"field" => name}, socket) do
+    selected = if socket.assigns.selected_field == name, do: nil, else: name
+    {:noreply, assign(socket, selected_field: selected)}
+  end
+
   def handle_event("load_more_addr_txs", _, socket) do
     addr = socket.assigns.addr_string
     last = socket.assigns.addr_txs_last
@@ -489,6 +566,87 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   end
 
   @impl true
+  def handle_info(:fetch_home_data_async, socket) do
+    # Short delay before the first Esplora call so an early phx-change (decode) can run first;
+    # get_recent_blocks/1 may still take a long time inside one handle_info.
+    Process.send_after(self(), :fetch_home_blocks, 50)
+    {:noreply, socket}
+  end
+
+  def handle_info(:fetch_home_blocks, socket) do
+    if socket.assigns.live_action != :home do
+      {:noreply, socket}
+    else
+      socket =
+        case ds().get_recent_blocks(50) do
+          {:ok, list} when is_list(list) ->
+            tip =
+              case list do
+                [%{"id" => id} | _] -> id
+                _ -> nil
+              end
+
+            assign(socket, blocks: list, tip_hash: tip, blocks_error: nil)
+
+          {:error, reason} ->
+            assign(socket, blocks_error: esplora_err(reason))
+        end
+
+      Process.send_after(self(), :fetch_home_fees, 0)
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(:fetch_home_fees, socket) do
+    if socket.assigns.live_action != :home do
+      {:noreply, socket}
+    else
+      socket =
+        case ds().get_fee_estimates() do
+          {:ok, fees} ->
+            assign(socket, fee_estimates: fees)
+
+          {:error, _} ->
+            assign(socket, fee_estimates: %{})
+        end
+
+      Process.send_after(self(), :fetch_home_mempool, 0)
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(:fetch_home_mempool, socket) do
+    if socket.assigns.live_action != :home do
+      {:noreply, socket}
+    else
+      socket =
+        case ds().get_mempool() do
+          {:ok, stats} ->
+            assign(socket, mempool_stats: stats, mempool_error: nil)
+
+          {:error, reason} ->
+            assign(socket, mempool_error: esplora_err(reason))
+        end
+
+      Process.send_after(self(), :fetch_home_mempool_recent, 0)
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(:fetch_home_mempool_recent, socket) do
+    if socket.assigns.live_action != :home do
+      {:noreply, socket}
+    else
+      recent =
+        case ds().mempool_recent() do
+          {:ok, list} when is_list(list) -> Enum.take(list, 10)
+          _ -> []
+        end
+
+      {:noreply, assign(socket, :mempool_recent, recent)}
+    end
+  end
+
   def handle_info(:poll_blocks, socket) do
     socket =
       if socket.assigns.live_action != :home do
@@ -529,19 +687,39 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       if socket.assigns.live_action != :home do
         socket
       else
-        case ds().get_mempool() do
-          {:ok, stats} ->
-            assign(socket, :mempool_stats, stats)
+        socket =
+          case ds().get_mempool() do
+            {:ok, stats} ->
+              assign(socket, :mempool_stats, stats)
 
-          {:error, reason} ->
-            assign(socket, :mempool_error, esplora_err(reason))
-        end
+            {:error, reason} ->
+              assign(socket, :mempool_error, esplora_err(reason))
+          end
+
+        recent =
+          case ds().mempool_recent() do
+            {:ok, list} when is_list(list) -> Enum.take(list, 10)
+            _ -> []
+          end
+
+        assign(socket, :mempool_recent, recent)
       end
 
     {:noreply, schedule_mempool_poll(socket)}
   rescue
     _ ->
       {:noreply, schedule_mempool_poll(socket)}
+  end
+
+  def handle_info(:channels_retry, socket) do
+    socket =
+      if socket.assigns.live_action == :channels do
+        assign_channels_data(socket)
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   @impl true
@@ -567,6 +745,8 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             <.tx_view {assigns} />
           <% :address -> %>
             <.address_view {assigns} />
+          <% :channels -> %>
+            <.channels_view {assigns} />
         <% end %>
       </main>
 
@@ -606,6 +786,13 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 md:gap-4 md:px-6">
         <.link navigate={~p"/"} class="shrink-0 text-lg font-semibold text-[#f7931a]">
           Bitcoinex Explorer
+        </.link>
+
+        <.link
+          navigate={~p"/channels"}
+          class="hidden shrink-0 text-sm text-zinc-400 hover:text-[#f7931a] md:inline-block"
+        >
+          Channels
         </.link>
 
         <form
@@ -672,6 +859,51 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               <dt class="text-zinc-500">Virtual size</dt>
               <dd class="font-mono"><%= format_vsize(@mempool_stats["vsize"]) %></dd>
             </dl>
+          <% end %>
+
+          <div
+            id="fee-heatmap"
+            phx-hook="FeeHeatmap"
+            data-estimates={Jason.encode!(@fee_estimates || %{})}
+            class="w-full h-20 mt-4"
+          >
+          </div>
+
+          <%= if @mempool_recent != [] do %>
+            <div class="mt-4 overflow-x-auto">
+              <h3 class="mb-2 text-xs font-medium uppercase text-zinc-500">Recent (mempool)</h3>
+              <table class="w-full text-left text-xs">
+                <thead class="text-zinc-500">
+                  <tr>
+                    <th class="pb-1 pr-2">Txid</th>
+                    <th class="pb-1 pr-2">Fee rate</th>
+                    <th class="pb-1">Size</th>
+                  </tr>
+                </thead>
+                <tbody class="font-mono text-zinc-300">
+                  <%= for tx <- @mempool_recent do %>
+                    <% vsize = max(Map.get(tx, "vsize", 0) || 0, 1) %>
+                    <% fee = Map.get(tx, "fee", 0) || 0 %>
+                    <% fr = Float.round(fee / vsize, 1) %>
+                    <tr class="border-t border-zinc-800/80">
+                      <td class="py-1 pr-2">
+                        <.link
+                          navigate={~p"/tx/#{tx["txid"]}"}
+                          class="text-[#f7931a] hover:underline"
+                          title={tx["txid"]}
+                        >
+                          <%= truncate_mempool_txid(tx["txid"]) %>
+                        </.link>
+                      </td>
+                      <td class={"py-1 pr-2 #{recent_fee_rate_class(fr, @fee_estimates)}"}>
+                        <%= :erlang.float_to_binary(fr, decimals: 1) %> sat/vB
+                      </td>
+                      <td class="py-1 text-zinc-400"><%= vsize %> vB</td>
+                    </tr>
+                  <% end %>
+                </tbody>
+              </table>
+            </div>
           <% end %>
         </div>
 
@@ -783,12 +1015,17 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
         <p
           :if={@error}
+          id="decode-error"
           class="mt-3 rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
         >
           <%= @error %>
         </p>
 
-        <div :if={@result} class="mt-4 overflow-hidden rounded-xl border border-zinc-700">
+        <div
+          :if={@result}
+          id="decode-result"
+          class="mt-4 overflow-hidden rounded-xl border border-zinc-700"
+        >
           <dl class="divide-y divide-zinc-800">
             <%= for {key, value} <- Decode.rows_for_result(@result) do %>
               <div class="grid grid-cols-1 gap-1 p-3 md:grid-cols-[220px_1fr] md:gap-4">
@@ -840,6 +1077,90 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             />
             <.meta_row label="Miner (coinbase hint)" value={@block_miner} mono={false} link={nil} />
           </dl>
+
+          <button
+            :if={@header_fields != []}
+            type="button"
+            phx-click="toggle_dissector"
+            class={[
+              "mt-4 rounded-lg border px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-800",
+              if(@dissector_open, do: "border-[#f7931a]", else: "border-zinc-600")
+            ]}
+          >
+            <%= if @dissector_open, do: "Close dissector", else: "Dissect this block" %>
+          </button>
+
+          <%= if @dissector_open and @header_fields != [] do %>
+            <section id="block-dissector" class="mt-4 font-mono text-sm">
+              <%= if @block_header_hex do %>
+                <div class="break-all leading-relaxed mb-2 text-xs">
+                  <%= for {seg, field} <- Enum.zip(header_hex_segments(@block_header_hex), @header_fields) do %>
+                    <% {text_class, _} = dissector_field_style(field.name) %>
+                    <span class={text_class}><%= seg %></span>
+                  <% end %>
+                </div>
+                <div class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
+                  <%= for field <- @header_fields do %>
+                    <% {text_class, bg_class} = dissector_field_style(field.name) %>
+                    <span class="flex items-center gap-1">
+                      <span class={"h-2 w-2 shrink-0 rounded-sm #{bg_class}"}></span>
+                      <span class={text_class}><%= field.display_name %></span>
+                      <span class="text-zinc-600">(<%= field.bytes %>)</span>
+                    </span>
+                  <% end %>
+                </div>
+              <% end %>
+
+              <div class="space-y-1">
+                <%= for field <- @header_fields do %>
+                  <% {text_class, bg_class} = dissector_field_style(field.name) %>
+                  <div
+                    phx-click="select_field"
+                    phx-value-field={field.name}
+                    class={"cursor-pointer rounded px-3 py-2 #{if @selected_field == field.name, do: "bg-zinc-800", else: "hover:bg-zinc-900"}"}
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class={"h-3 w-3 shrink-0 rounded-sm #{bg_class}"}></span>
+                        <span class={"font-semibold truncate #{text_class}"}>
+                          <%= field.display_name %>
+                        </span>
+                      </div>
+                      <div class="flex gap-3 text-zinc-400 text-xs shrink-0">
+                        <span><%= field.bytes %></span>
+                        <span><%= field.byte_count %> bytes</span>
+                      </div>
+                    </div>
+                    <div class="text-zinc-300 truncate text-xs mt-1">
+                      <%= inspect_field_value(field) %>
+                    </div>
+
+                    <%= if @selected_field == field.name do %>
+                      <div class="mt-2 text-zinc-400 text-xs space-y-1 border-t border-zinc-700 pt-2">
+                        <p><%= field.description %></p>
+                        <%= if field.name == "timestamp" do %>
+                          <p>UTC: <%= format_unix_timestamp_utc(field.value) %></p>
+                        <% end %>
+                        <%= if field.name == "bits" do %>
+                          <p>
+                            Full target:
+                            <span class="text-zinc-300 break-all">
+                              <%= BlockHeader.target_from_bits(bits_hex_to_integer(field.value)) %>
+                            </span>
+                          </p>
+                        <% end %>
+                        <%= if field.name == "nonce" do %>
+                          <p class="italic">
+                            Miners increment this value quadrillions of times per second across the network to find a valid hash.
+                          </p>
+                        <% end %>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+            </section>
+          <% end %>
         </section>
 
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
@@ -1209,7 +1530,110 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             Load more
           </button>
         </section>
+
+        <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+          <h2 class="mb-3 text-lg font-medium">Unspent outputs</h2>
+          <.async_result :let={r} assign={@utxos}>
+            <:loading>
+              <p class="text-sm text-zinc-500">Loading UTXOs…</p>
+            </:loading>
+            <:failed></:failed>
+            <%= if r.utxos == [] do %>
+              <p class="text-sm text-zinc-500">No unspent outputs.</p>
+            <% else %>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                  <thead class="text-xs uppercase text-zinc-500">
+                    <tr>
+                      <th class="pb-2">Txid</th>
+                      <th class="pb-2 text-right">vout</th>
+                      <th class="pb-2 text-right">Value</th>
+                      <th class="pb-2">Type</th>
+                      <th class="pb-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody class="font-mono text-xs">
+                    <%= for u <- r.utxos do %>
+                      <tr class="border-t border-zinc-800">
+                        <td class="py-2">
+                          <.link
+                            navigate={~p"/tx/#{u["txid"]}"}
+                            class="text-[#f7931a] hover:underline"
+                            title={u["txid"]}
+                          >
+                            <%= truncate_middle(u["txid"], 18) %>
+                          </.link>
+                        </td>
+                        <td class="py-2 text-right"><%= u["vout"] %></td>
+                        <td class="py-2 text-right"><%= u[:value_btc] %></td>
+                        <td class="py-2">
+                          <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-300">
+                            <%= script_type_badge(u[:script_type]) %>
+                          </span>
+                        </td>
+                        <td class="py-2">
+                          <span class={
+                            if u[:confirmed], do: "text-emerald-400", else: "text-amber-400"
+                          }>
+                            <%= if u[:confirmed], do: "confirmed", else: "unconfirmed" %>
+                          </span>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
+              </div>
+              <p class="mt-3 text-right text-sm text-zinc-400">
+                Total unspent:
+                <strong class="text-zinc-100">
+                  <%= fmt_btc(UtxoEnrichment.total_value_sats(r.utxos)) %> BTC
+                </strong>
+              </p>
+            <% end %>
+          </.async_result>
+        </section>
       <% end %>
+    </div>
+    """
+  end
+
+  defp channels_view(assigns) do
+    ~H"""
+    <section id="channels-page">
+      <h2 class="text-xl font-semibold mb-4">Lightning Network — Top 100 Nodes</h2>
+
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <.stat_card label="Nodes" value={if @channel_stats, do: @channel_stats.node_count, else: "—"} />
+        <.stat_card
+          label="Channels"
+          value={if @channel_stats, do: @channel_stats.channel_count, else: "—"}
+        />
+        <.stat_card
+          label="Total capacity"
+          value={if @channel_stats, do: "#{@channel_stats.total_capacity_btc} BTC", else: "—"}
+        />
+      </div>
+
+      <div
+        id="lightning-graph"
+        phx-hook="LightningGraph"
+        data-graph={@graph_json}
+        class="relative w-full h-96 border border-zinc-700 rounded"
+      >
+      </div>
+
+      <p class="text-xs text-zinc-500 mt-2">
+        Top 100 nodes by liquidity. Data sourced from mempool.space.
+      </p>
+    </section>
+    """
+  end
+
+  defp stat_card(assigns) do
+    ~H"""
+    <div class="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
+      <div class="text-xs text-zinc-500"><%= @label %></div>
+      <div class="mt-1 font-mono text-lg text-zinc-100"><%= @value %></div>
     </div>
     """
   end
@@ -1301,6 +1725,77 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   end
 
   defp fmt_unix(_), do: "—"
+
+  defp truncate_mempool_txid(txid) when is_binary(txid) and byte_size(txid) >= 16 do
+    String.slice(txid, 0, 8) <> "…" <> String.slice(txid, -8, 8)
+  end
+
+  defp truncate_mempool_txid(txid), do: txid
+
+  defp recent_fee_rate_class(fr, fees) when is_float(fr) and is_map(fees) do
+    e1 = fee_at(fees, 1)
+    e3 = fee_at(fees, 3)
+    e6 = fee_at(fees, 6)
+
+    cond do
+      e1 != nil and fr >= as_fee_num(e1) -> "text-emerald-400"
+      e3 != nil and fr >= as_fee_num(e3) -> "text-yellow-300"
+      e6 != nil and fr >= as_fee_num(e6) -> "text-orange-400"
+      true -> "text-red-400"
+    end
+  end
+
+  defp recent_fee_rate_class(_, _), do: "text-zinc-400"
+
+  defp as_fee_num(n) when is_float(n), do: n
+  defp as_fee_num(n) when is_integer(n), do: n * 1.0
+
+  defp header_hex_segments(hex) when byte_size(hex) == 160 do
+    [
+      String.slice(hex, 0, 8),
+      String.slice(hex, 8, 64),
+      String.slice(hex, 72, 64),
+      String.slice(hex, 136, 8),
+      String.slice(hex, 144, 8),
+      String.slice(hex, 152, 8)
+    ]
+  end
+
+  defp header_hex_segments(_), do: []
+
+  defp dissector_field_style("version"), do: {"text-amber-400", "bg-amber-400"}
+  defp dissector_field_style("prev_block"), do: {"text-blue-400", "bg-blue-400"}
+  defp dissector_field_style("merkle_root"), do: {"text-emerald-400", "bg-emerald-400"}
+  defp dissector_field_style("timestamp"), do: {"text-violet-400", "bg-violet-400"}
+  defp dissector_field_style("bits"), do: {"text-orange-400", "bg-orange-400"}
+  defp dissector_field_style("nonce"), do: {"text-rose-400", "bg-rose-400"}
+  defp dissector_field_style(_), do: {"text-zinc-400", "bg-zinc-400"}
+
+  defp inspect_field_value(%{value: v}) when is_integer(v), do: Integer.to_string(v)
+
+  defp inspect_field_value(%{value: v}) when is_binary(v) do
+    if String.length(v) > 20, do: String.slice(v, 0, 16) <> "…", else: v
+  end
+
+  defp inspect_field_value(%{value: v}), do: inspect(v)
+
+  defp format_unix_timestamp_utc(ts) when is_integer(ts) do
+    DateTime.from_unix!(ts) |> Calendar.strftime("%Y-%m-%d %H:%M:%S UTC")
+  rescue
+    _ -> Integer.to_string(ts)
+  end
+
+  defp bits_hex_to_integer(hex) when is_binary(hex) do
+    String.to_integer(String.downcase(hex), 16)
+  rescue
+    ArgumentError -> 0
+  end
+
+  defp script_type_badge(nil), do: "?"
+
+  defp script_type_badge(atom) when is_atom(atom) do
+    atom |> Atom.to_string() |> String.upcase()
+  end
 
   # Heroicons outline "qr-code" (24×24) — shared by mobile scan buttons.
   defp qr_scan_icon(assigns) do

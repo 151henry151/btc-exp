@@ -236,9 +236,6 @@ defmodule BitcoinexExplorer.Esplora do
     end)
   end
 
-  @spec mempool_recent() :: {:ok, list()} | {:error, term()}
-  def mempool_recent, do: get_json("/mempool/recent")
-
   # ——— DataSource callbacks ———
 
   @impl true
@@ -275,4 +272,13 @@ defmodule BitcoinexExplorer.Esplora do
 
   @impl true
   def get_fee_estimates(), do: fee_estimates()
+
+  @impl true
+  def mempool_recent(), do: get_json("/mempool/recent")
+
+  @impl true
+  def address_utxos(addr) when is_binary(addr) do
+    enc = URI.encode(addr, &URI.char_unreserved?/1)
+    get_json("/address/#{enc}/utxo")
+  end
 end
