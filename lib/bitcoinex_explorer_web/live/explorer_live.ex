@@ -1553,12 +1553,14 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
           <h2 class="mb-3 text-lg font-medium">Unspent outputs</h2>
-          <.async_result :let={r} assign={@utxos}>
+          <.async_result :let={utxos} assign={@utxos}>
             <:loading>
               <p class="text-sm text-zinc-500">Loading UTXOs…</p>
             </:loading>
-            <:failed></:failed>
-            <%= if r.utxos == [] do %>
+            <:failed>
+              <p class="text-sm text-orange-300">Could not load UTXOs.</p>
+            </:failed>
+            <%= if utxos == [] do %>
               <p class="text-sm text-zinc-500">No unspent outputs.</p>
             <% else %>
               <div class="overflow-x-auto">
@@ -1573,7 +1575,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
                     </tr>
                   </thead>
                   <tbody class="font-mono text-xs">
-                    <%= for u <- r.utxos do %>
+                    <%= for u <- utxos do %>
                       <tr class="border-t border-zinc-800">
                         <td class="py-2">
                           <.link
@@ -1606,7 +1608,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               <p class="mt-3 text-right text-sm text-zinc-400">
                 Total unspent:
                 <strong class="text-zinc-100">
-                  <%= fmt_btc(UtxoEnrichment.total_value_sats(r.utxos)) %> BTC
+                  <%= fmt_btc(UtxoEnrichment.total_value_sats(utxos)) %> BTC
                 </strong>
               </p>
             <% end %>

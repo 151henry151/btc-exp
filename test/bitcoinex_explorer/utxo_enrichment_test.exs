@@ -44,4 +44,19 @@ defmodule BitcoinexExplorer.UtxoEnrichmentTest do
   test "total_value_sats/1 sums value fields" do
     assert UtxoEnrichment.total_value_sats(@raw_utxos) == 100_000_546
   end
+
+  test "enrich/2 coerces float JSON value to integer sats without raising" do
+    raw = [
+      %{
+        "txid" => String.duplicate("c", 64),
+        "vout" => 0,
+        "status" => %{"confirmed" => true, "block_height" => 1},
+        "value" => 12_345.0
+      }
+    ]
+
+    [u] = UtxoEnrichment.enrich(raw, @bc1q)
+    assert u["value"] == 12_345
+    assert u[:value_btc] == "0.00012345"
+  end
 end

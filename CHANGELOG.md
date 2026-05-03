@@ -5,6 +5,11 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.23] - 2026-05-03
+
+- **`ExplorerLive`** address UTXOs: fix **`async_result`** inner block to use the **list** returned for **`assign_async(:utxos, …)`** (not **`r.utxos`**, which crashed after load and could remount in a loop); show a short **failed** message when the async errors.
+- **`UtxoEnrichment`**: coerce **`value`** to integer sats from int/float/binary before **`Decimal`** math; normalize **`"value"`** on enriched maps; make **`total_value_sats/1`** use the same coercion.
+
 ## [0.4.22] - 2026-05-03
 
 - **`TxFlowGraph`** (**`hooks.js`**): size the SVG to the container width (minimum **400px**), center the **TX** box with **`ResizeObserver`** reflow, and use thinner grey link strokes (**~0.9–3.1** vs value) with round caps.

@@ -17,7 +17,7 @@ defmodule BitcoinexExplorer.UtxoEnrichment do
   end
 
   defp enrich_one(%{} = utxo, script_type) do
-    val = Map.get(utxo, "value") || 0
+    val = value_to_sats_int(Map.get(utxo, "value"))
     status = Map.get(utxo, "status") || %{}
 
     btc_str =
@@ -32,7 +32,23 @@ defmodule BitcoinexExplorer.UtxoEnrichment do
     |> Map.put(:confirmed, Map.get(status, "confirmed") == true)
     |> Map.put(:block_height, Map.get(status, "block_height"))
     |> Map.put(:value_btc, btc_str)
+    |> Map.put("value", val)
   end
+
+  defp value_to_sats_int(v) when is_integer(v) and v >= 0, do: v
+
+  defp value_to_sats_int(v) when is_float(v) and v >= 0 do
+    v |> Float.round() |> trunc() |> max(0)
+  end
+
+  defp value_to_sats_int(v) when is_binary(v) do
+    case Integer.parse(String.trim(v)) do
+      {i, _} when i >= 0 -> i
+      _ -> 0
+    end
+  end
+
+  defp value_to_sats_int(_), do: 0
 
   defp script_type_from_address(addr) when is_binary(addr) do
     case Decode.decode_address(addr) do
@@ -54,7 +70,7 @@ defmodule BitcoinexExplorer.UtxoEnrichment do
   @spec total_value_sats([map()]) :: non_neg_integer()
   def total_value_sats(utxos) when is_list(utxos) do
     utxos
-    |> Enum.map(&Map.get(&1, "value", 0))
+    |> Enum.map(fn u -> value_to_sats_int(Map.get(u, "value")) end)
     |> Enum.sum()
   end
 end
