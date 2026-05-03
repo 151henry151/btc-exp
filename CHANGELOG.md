@@ -5,6 +5,10 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.18] - 2026-05-03
+
+- **`ExplorerLive`** home **Search** / **Decode** row: use a **two-column grid** below **`sm`**, then **`sm:flex sm:w-fit`** with **`sm:w-auto`** buttons so full-width layouts no longer stretch the buttons edge-to-edge.
+
 ## [0.4.17] - 2026-05-03
 
 - **`ExplorerLive`**: keep **QR scan** in the nav search row and on the home card at **all** breakpoints (drop **`md:hidden`**) so desktop and laptop webcams can scan.

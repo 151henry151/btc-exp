@@ -4,7 +4,7 @@ defmodule BitcoinexExplorer.MixProject do
   def project do
     [
       app: :bitcoinex_explorer,
-      version: "0.4.17",
+      version: "0.4.18",
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
