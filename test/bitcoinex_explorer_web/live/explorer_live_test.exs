@@ -11,7 +11,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLiveTest do
     refute html =~ "phx-value-tab"
   end
 
-  test "home includes mobile QR scan hook on home card", %{conn: conn} do
+  test "home includes QR scan hook on home card", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/")
 
     assert html =~ ~s(phx-hook="QrScan")

@@ -819,7 +819,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             phx-update="ignore"
             data-target-selector="#nav-search-q"
             data-after-scan="submit-search"
-            class="shrink-0 md:hidden"
+            class="shrink-0"
           >
             <button
               type="button"
@@ -870,7 +870,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               phx-update="ignore"
               data-target-selector="#home-q"
               data-after-scan="submit-search"
-              class="shrink-0 md:hidden"
+              class="shrink-0"
             >
               <button
                 type="button"
@@ -882,12 +882,12 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               </button>
             </div>
           </div>
-          <div class="mt-3 flex gap-2">
+          <div class="mt-3 flex flex-wrap gap-2 sm:justify-start">
             <button
               type="submit"
               name="action"
               value="search"
-              class="flex-1 rounded-lg bg-[#f7931a] px-3 py-2 text-sm font-medium text-black hover:bg-[#ffa433]"
+              class="min-w-[8rem] flex-1 rounded-lg bg-[#f7931a] px-4 py-2 text-sm font-medium text-black hover:bg-[#ffa433] sm:flex-none sm:min-w-0"
             >
               Search
             </button>
@@ -895,7 +895,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
               type="submit"
               name="action"
               value="decode"
-              class="flex-1 rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+              class="min-w-[8rem] flex-1 rounded-lg border border-zinc-600 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800 sm:flex-none sm:min-w-0"
             >
               Decode
             </button>

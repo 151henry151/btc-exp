@@ -5,6 +5,11 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.17] - 2026-05-03
+
+- **`ExplorerLive`**: keep **QR scan** in the nav search row and on the home card at **all** breakpoints (drop **`md:hidden`**) so desktop and laptop webcams can scan.
+- **`ExplorerLive`**: size **Search** / **Decode** with **`flex-1`** only below **`sm`**; from **`sm`** use **`flex-none`** so the buttons are not full-width on large screens.
+
 ## [0.4.16] - 2026-05-03
 
 - Add **`MempoolFeeDisplay`** and show **3 blk** / **6 blk** on the home mempool fee strip only when their sat/vB estimate differs from **Next**.
