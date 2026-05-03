@@ -5,6 +5,10 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.19] - 2026-05-03
+
+- **`ExplorerLive`** home **Search** / **Decode**: drop the **`sm`** breakpoint grid (which still applied below **640px** CSS width, e.g. zoomed or narrow viewports) in favor of **`inline-flex flex-wrap`** with **`shrink-0`** buttons so width follows content at any zoom.
+
 ## [0.4.18] - 2026-05-03
 
 - **`ExplorerLive`** home **Search** / **Decode** row: use a **two-column grid** below **`sm`**, then **`sm:flex sm:w-fit`** with **`sm:w-auto`** buttons so full-width layouts no longer stretch the buttons edge-to-edge.
