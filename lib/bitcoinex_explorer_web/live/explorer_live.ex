@@ -1123,20 +1123,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           <%= if @dissector_open and @header_fields != [] do %>
             <section id="block-dissector" class="mt-4 font-mono text-sm">
               <%= if @block_header_hex do %>
-                <div class="break-all leading-relaxed mb-2 text-xs">
+                <div class="mb-3 break-all text-xs leading-relaxed">
                   <%= for {seg, field} <- Enum.zip(header_hex_segments(@block_header_hex), @header_fields) do %>
                     <% {text_class, _} = dissector_field_style(field.name) %>
                     <span class={text_class}><%= seg %></span>
-                  <% end %>
-                </div>
-                <div class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400">
-                  <%= for field <- @header_fields do %>
-                    <% {text_class, bg_class} = dissector_field_style(field.name) %>
-                    <span class="flex items-center gap-1">
-                      <span class={"h-2 w-2 shrink-0 rounded-sm #{bg_class}"}></span>
-                      <span class={text_class}><%= field.display_name %></span>
-                      <span class="text-zinc-600">(<%= field.bytes %>)</span>
-                    </span>
                   <% end %>
                 </div>
               <% end %>

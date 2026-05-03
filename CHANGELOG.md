@@ -5,6 +5,10 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.21] - 2026-05-03
+
+- **`ExplorerLive`** block dissector: remove the duplicate horizontal color legend under the header hex; keep the single clickable field list with values and byte ranges.
+
 ## [0.4.20] - 2026-05-03
 
 - Remove the **`Channels`** header link and the standalone **`ExplorerLive`** **`:channels`** route; Lightning content remains on the home page only.
