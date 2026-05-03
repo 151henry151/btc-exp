@@ -490,136 +490,6 @@ export const QrScan = {
   },
 }
 
-function feeHeatmapGradientId(el) {
-  return `fee-heatmap-grad-${el.id || "default"}`
-}
-
-export const FeeHeatmap = {
-  mounted() {
-    this.redraw()
-  },
-  updated() {
-    this.redraw()
-  },
-  redraw() {
-    const raw = this.el.dataset.estimates
-    d3.select(this.el).selectAll("svg").remove()
-
-    if (!raw || raw === "{}" || raw.trim() === "") {
-      return
-    }
-
-    let estimates
-    try {
-      estimates = JSON.parse(raw)
-    } catch (_) {
-      return
-    }
-
-    const targets = [
-      { key: "1", tick: "next block" },
-      { key: "3", tick: "~30 min" },
-      { key: "6", tick: "~1 hr" },
-      { key: "144", tick: "~24 hr" },
-    ]
-
-    const feeNums = targets.map((t) => Number(estimates[t.key])).filter((n) => Number.isFinite(n))
-    if (feeNums.length === 0) {
-      return
-    }
-
-    const minV = Math.min(...feeNums)
-    const maxV = Math.max(...feeNums)
-    const span = maxV - minV || 1
-
-    const width = Math.max(this.el.clientWidth || 400, 240)
-    const padTop = 24
-    const padBottom = 28
-    const chartH = 32
-    const height = padTop + chartH + padBottom
-
-    const root = d3
-      .select(this.el)
-      .append("svg")
-      .attr("width", width)
-      .attr("height", height)
-      .attr("overflow", "visible")
-
-    const gid = feeHeatmapGradientId(this.el)
-    const defs = root.append("defs")
-    const lg = defs
-      .append("linearGradient")
-      .attr("id", gid)
-      .attr("x1", "0%")
-      .attr("y1", "0%")
-      .attr("x2", "100%")
-      .attr("y2", "0%")
-    lg.append("stop").attr("offset", "0%").attr("stop-color", "#ef4444")
-    lg.append("stop").attr("offset", "55%").attr("stop-color", "#eab308")
-    lg.append("stop").attr("offset", "100%").attr("stop-color", "#22c55e")
-
-    const barTop = padTop
-    const barBottom = padTop + chartH
-
-    root
-      .append("rect")
-      .attr("x", 0)
-      .attr("y", barTop)
-      .attr("width", width)
-      .attr("height", chartH)
-      .attr("rx", 4)
-      .attr("fill", `url(#${gid})`)
-
-    const xForFee = (v) => width * ((maxV - v) / span)
-
-    const finiteTicks = targets.filter(({ key }) => Number.isFinite(Number(estimates[key])))
-    finiteTicks.forEach(({ key, tick }, i) => {
-      const v = Number(estimates[key])
-      const x = xForFee(v)
-      const isFirst = i === 0
-      const isLast = i === finiteTicks.length - 1
-      const feeAnchor = isFirst ? "start" : isLast ? "end" : "middle"
-      const labelAnchor = isFirst ? "start" : isLast ? "end" : "middle"
-
-      root
-        .append("line")
-        .attr("x1", x)
-        .attr("x2", x)
-        .attr("y1", barTop)
-        .attr("y2", barBottom)
-        .attr("stroke", "#18181b")
-        .attr("stroke-opacity", 0.85)
-        .attr("stroke-width", 1)
-
-      root
-        .append("circle")
-        .attr("cx", x)
-        .attr("cy", barTop + 12)
-        .attr("r", 3)
-        .attr("fill", "#fafafa")
-
-      root
-        .append("text")
-        .attr("x", x)
-        .attr("y", barTop + 6)
-        .attr("text-anchor", feeAnchor)
-        .attr("fill", "#fafafa")
-        .attr("font-size", "10px")
-        .attr("font-family", "ui-monospace, monospace")
-        .text(`${v.toFixed(1)}`)
-
-      root
-        .append("text")
-        .attr("x", x)
-        .attr("y", barBottom + 14)
-        .attr("text-anchor", labelAnchor)
-        .attr("fill", "#a1a1aa")
-        .attr("font-size", "10px")
-        .text(tick)
-    })
-  },
-}
-
 export const LightningGraph = {
   mounted() {
     this.render()
@@ -653,6 +523,7 @@ export const LightningGraph = {
     }
 
     const nodes = Array.isArray(payload.nodes) ? payload.nodes : []
+    const edges = Array.isArray(payload.edges) ? payload.edges : []
     if (nodes.length === 0) {
       const msg = document.createElement("div")
       msg.className = "flex h-full items-center justify-center text-sm text-zinc-500"
@@ -662,7 +533,8 @@ export const LightningGraph = {
     }
 
     const width = Math.max(this.el.clientWidth || 600, 280)
-    const height = Math.max(this.el.clientHeight || 384, 240)
+    const rect = this.el.getBoundingClientRect()
+    const height = Math.max(rect.height > 0 ? rect.height : 500, 300)
 
     const svg = d3.select(this.el).append("svg").attr("width", width).attr("height", height)
 
@@ -684,6 +556,18 @@ export const LightningGraph = {
     const maxR = 18
     const cx = (x) => Math.max(maxR, Math.min(width - maxR, x == null ? width / 2 : x))
     const cy = (y) => Math.max(maxR, Math.min(height - maxR, y == null ? height / 2 : y))
+
+    const edgeCapMax = Math.max(...edges.map((e) => e.capacity_sats || 0), 1)
+
+    const edgeSelection = svg
+      .append("g")
+      .attr("class", "edges")
+      .selectAll("line")
+      .data(edges)
+      .join("line")
+      .attr("stroke", "#3f3f46")
+      .attr("stroke-opacity", 0.5)
+      .attr("stroke-width", (d) => 0.5 + (d.capacity_sats / edgeCapMax) * 2.5)
 
     const layer = svg.append("g")
 
@@ -711,27 +595,39 @@ export const LightningGraph = {
       .classed("py-1", true)
       .classed("text-xs", true)
       .classed("text-zinc-100", true)
+      .classed("min-w-max", true)
       .classed("hidden", true)
 
     const el = this.el
     node
       .on("mousemove", (event, d) => {
-        const [mx, my] = d3.pointer(event, el)
+        const containerRect = el.getBoundingClientRect()
+        const mx = event.clientX - containerRect.left
+        const my = event.clientY - containerRect.top
         const btc = ((d.capacity_sats || 0) / 1e8).toFixed(2)
         tooltip
           .classed("hidden", false)
-          .html(`${d.label} — ${btc} BTC`)
-          .style("left", `${mx + 12}px`)
-          .style("top", `${my - 8}px`)
+          .html(`<div class="font-semibold">${d.label}</div><div class="text-zinc-400">${btc} BTC capacity</div>`)
+          .style("left", `${mx + 14}px`)
+          .style("top", `${my - 24}px`)
       })
       .on("mouseleave", () => tooltip.classed("hidden", true))
 
+    const linkForce = d3.forceLink(edges).id((d) => d.id).distance(60).strength(0.3)
+
     const sim = d3
       .forceSimulation(simulationNodes)
-      .force("charge", d3.forceManyBody().strength(-80))
-      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("link", linkForce)
+      .force("charge", d3.forceManyBody().strength(-60))
+      .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05))
       .force("collide", d3.forceCollide((d) => d.r + 2))
+      .alphaDecay(0.02)
       .on("tick", () => {
+        edgeSelection
+          .attr("x1", (d) => cx(d.source.x))
+          .attr("y1", (d) => cy(d.source.y))
+          .attr("x2", (d) => cx(d.target.x))
+          .attr("y2", (d) => cy(d.target.y))
         node.attr("cx", (d) => cx(d.x)).attr("cy", (d) => cy(d.y))
       })
 
@@ -750,6 +646,5 @@ export default {
   RelativeTime,
   AddressQr,
   QrScan,
-  FeeHeatmap,
   LightningGraph,
 }

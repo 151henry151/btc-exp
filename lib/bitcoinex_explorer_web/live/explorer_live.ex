@@ -17,6 +17,8 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
     UtxoEnrichment
   }
 
+  alias BitcoinexExplorerWeb.MempoolFeeDisplay
+
   alias Phoenix.LiveView.AsyncResult
 
   defp ds, do: DataSource.impl()
@@ -116,7 +118,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             # fetch_home_data/1 blocks all events until every GET completes.
             if connected?(socket) do
               Process.send_after(self(), :fetch_home_data_async, 0)
-              socket
+              assign_channels_data(socket)
             else
               socket
             end
@@ -186,10 +188,10 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       assign(socket, channel_stats: nil, graph_json: "null")
     else
       case ChannelsCache.get() do
-        {:ok, %{stats: stats, nodes: nodes}} ->
+        {:ok, %{stats: stats, nodes: nodes, edges: edges}} ->
           assign(socket,
             channel_stats: LightningGraph.summary_stats(stats),
-            graph_json: Jason.encode!(LightningGraph.from_nodes(nodes))
+            graph_json: Jason.encode!(LightningGraph.from_data(nodes, edges))
           )
 
         :loading ->
@@ -413,114 +415,28 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp esplora_err(other), do: inspect(other)
 
   @impl true
-  def handle_event("decode", %{"input" => input}, socket) do
-    value = String.trim(input || "")
+  def handle_event("home_action", %{"q" => q} = params, socket) do
+    case Map.get(params, "action", "search") do
+      "decode" ->
+        value = String.trim(q || "")
+        socket = assign(socket, :nav_input, q)
 
-    if value == "" do
-      {:noreply, assign(socket, input: "", result: nil, error: nil)}
-    else
-      case Decode.decode_auto(value) do
-        {:ok, result} ->
-          {:noreply, assign(socket, input: input, result: result, error: nil)}
+        if value == "" do
+          {:noreply, assign(socket, result: nil, error: nil)}
+        else
+          case Decode.decode_auto(value) do
+            {:ok, result} -> {:noreply, assign(socket, result: result, error: nil)}
+            {:error, message} -> {:noreply, assign(socket, result: nil, error: message)}
+          end
+        end
 
-        {:error, message} ->
-          {:noreply, assign(socket, input: input, result: nil, error: message)}
-      end
+      _ ->
+        do_search(String.trim(q || ""), socket)
     end
   end
 
   def handle_event("search", %{"q" => q}, socket) do
-    trimmed = String.trim(q || "")
-
-    if trimmed == "" do
-      {:noreply, socket}
-    else
-      case Search.classify(trimmed) do
-        {:bolt11, _} ->
-          case Decode.decode_auto(trimmed) do
-            {:ok, res} ->
-              {:noreply,
-               socket
-               |> assign(:nav_input, trimmed)
-               |> assign(:input, trimmed)
-               |> assign(:result, res)
-               |> assign(:error, nil)
-               |> push_patch(to: ~p"/")}
-
-            {:error, msg} ->
-              {:noreply,
-               socket
-               |> assign(:nav_input, trimmed)
-               |> assign(:error, msg)
-               |> assign(:result, nil)
-               |> push_patch(to: ~p"/")}
-          end
-
-        {:psbt, _} ->
-          case Decode.decode_auto(trimmed) do
-            {:ok, res} ->
-              {:noreply,
-               socket
-               |> assign(:nav_input, trimmed)
-               |> assign(:input, trimmed)
-               |> assign(:result, res)
-               |> assign(:error, nil)
-               |> push_patch(to: ~p"/")}
-
-            {:error, msg} ->
-              {:noreply,
-               socket
-               |> assign(:nav_input, trimmed)
-               |> assign(:error, msg)
-               |> assign(:result, nil)
-               |> push_patch(to: ~p"/")}
-          end
-
-        {:hex64, h} ->
-          case ds().get_tx(h) do
-            {:ok, _} ->
-              {:noreply, push_patch(socket, to: ~p"/tx/#{h}")}
-
-            {:error, _} ->
-              case ds().get_block(h) do
-                {:ok, _} ->
-                  {:noreply, push_patch(socket, to: ~p"/block/#{h}")}
-
-                {:error, _} ->
-                  {:noreply,
-                   assign(socket,
-                     error: "Nothing found for that 64-character hex (not a tx id or block hash)."
-                   )}
-              end
-          end
-
-        {:block_height, height} ->
-          {:noreply, redirect(socket, to: ~p"/block/height/#{height}")}
-
-        {:address, addr} ->
-          {:noreply, push_patch(socket, to: ~p"/address/#{addr}")}
-
-        {:decode_only, t} ->
-          case Decode.decode_auto(t) do
-            {:ok, res} ->
-              {:noreply,
-               socket
-               |> assign(:nav_input, t)
-               |> assign(:input, t)
-               |> assign(:result, res)
-               |> assign(:error, nil)
-               |> push_patch(to: ~p"/")}
-
-            {:error, msg} ->
-              {:noreply,
-               socket
-               |> assign(:nav_input, t)
-               |> assign(:error, msg)
-               |> assign(:result, nil)
-               |> push_patch(to: ~p"/")}
-          end
-      end
-    end
+    do_search(String.trim(q || ""), socket)
   end
 
   def handle_event("goto_address", %{"address" => addr}, socket) do
@@ -562,6 +478,93 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
       _ ->
         {:noreply, assign(socket, :addr_txs_has_more, false)}
+    end
+  end
+
+  defp do_search("", socket), do: {:noreply, socket}
+
+  defp do_search(trimmed, socket) do
+    case Search.classify(trimmed) do
+      {:bolt11, _} ->
+        case Decode.decode_auto(trimmed) do
+          {:ok, res} ->
+            {:noreply,
+             socket
+             |> assign(:nav_input, trimmed)
+             |> assign(:result, res)
+             |> assign(:error, nil)
+             |> push_patch(to: ~p"/")}
+
+          {:error, msg} ->
+            {:noreply,
+             socket
+             |> assign(:nav_input, trimmed)
+             |> assign(:error, msg)
+             |> assign(:result, nil)
+             |> push_patch(to: ~p"/")}
+        end
+
+      {:psbt, _} ->
+        case Decode.decode_auto(trimmed) do
+          {:ok, res} ->
+            {:noreply,
+             socket
+             |> assign(:nav_input, trimmed)
+             |> assign(:result, res)
+             |> assign(:error, nil)
+             |> push_patch(to: ~p"/")}
+
+          {:error, msg} ->
+            {:noreply,
+             socket
+             |> assign(:nav_input, trimmed)
+             |> assign(:error, msg)
+             |> assign(:result, nil)
+             |> push_patch(to: ~p"/")}
+        end
+
+      {:hex64, h} ->
+        case ds().get_tx(h) do
+          {:ok, _} ->
+            {:noreply, push_patch(socket, to: ~p"/tx/#{h}")}
+
+          {:error, _} ->
+            case ds().get_block(h) do
+              {:ok, _} ->
+                {:noreply, push_patch(socket, to: ~p"/block/#{h}")}
+
+              {:error, _} ->
+                {:noreply,
+                 assign(socket,
+                   error: "Nothing found for that 64-character hex (not a tx id or block hash)."
+                 )}
+            end
+        end
+
+      {:block_height, height} ->
+        {:noreply, redirect(socket, to: ~p"/block/height/#{height}")}
+
+      {:address, addr} ->
+        {:noreply, push_patch(socket, to: ~p"/address/#{addr}")}
+
+      {:decode_only, t} ->
+        case Decode.decode_auto(t) do
+          {:ok, res} ->
+            {:noreply,
+             socket
+             |> assign(:nav_input, t)
+             |> assign(:result, res)
+             |> assign(:error, nil)
+             |> push_patch(to: ~p"/")}
+
+          {:error, msg} ->
+            {:noreply,
+             socket
+             |> assign(:nav_input, t)
+             |> assign(:error, msg)
+             |> assign(:result, nil)
+             |> push_patch(to: ~p"/")}
+        end
     end
   end
 
@@ -713,7 +716,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   def handle_info(:channels_retry, socket) do
     socket =
-      if socket.assigns.live_action == :channels do
+      if socket.assigns.live_action in [:home, :channels] do
         assign_channels_data(socket)
       else
         socket
@@ -796,6 +799,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         </.link>
 
         <form
+          :if={@live_action != :home}
           phx-submit="search"
           id="nav-search-form"
           class="mx-auto flex min-w-[200px] flex-1 items-center gap-2 md:max-w-xl"
@@ -848,69 +852,96 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
   defp home_view(assigns) do
     ~H"""
     <div class="flex flex-col gap-8">
-      <section class="grid gap-4 md:grid-cols-2">
-        <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-          <h2 class="mb-3 text-lg font-medium text-zinc-200">Mempool</h2>
-          <p :if={@mempool_error} class="text-sm text-orange-300"><%= @mempool_error %></p>
+      <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <form id="home-action-form" phx-submit="home_action">
+          <div class="flex gap-2">
+            <input
+              id="home-q"
+              type="text"
+              name="q"
+              value={@nav_input}
+              placeholder="Txid, block hash, height, address, invoice, PSBT…"
+              autocomplete="off"
+              class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#f7931a] focus:outline-none focus:ring-1 focus:ring-[#f7931a]"
+            />
+            <div
+              id="home-qr-scan"
+              phx-hook="QrScan"
+              phx-update="ignore"
+              data-target-selector="#home-q"
+              data-after-scan="submit-search"
+              class="shrink-0 md:hidden"
+            >
+              <button
+                type="button"
+                data-qr-trigger
+                aria-label="Scan QR code"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-600 bg-zinc-900 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
+              >
+                <.qr_scan_icon />
+              </button>
+            </div>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button
+              type="submit"
+              name="action"
+              value="search"
+              class="flex-1 rounded-lg bg-[#f7931a] px-3 py-2 text-sm font-medium text-black hover:bg-[#ffa433]"
+            >
+              Search
+            </button>
+            <button
+              type="submit"
+              name="action"
+              value="decode"
+              class="flex-1 rounded-lg border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+            >
+              Decode
+            </button>
+          </div>
+        </form>
+
+        <p
+          :if={@error}
+          id="decode-error"
+          class="mt-3 rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
+        >
+          <%= @error %>
+        </p>
+
+        <div
+          :if={@result}
+          id="decode-result"
+          class="mt-4 overflow-hidden rounded-xl border border-zinc-700"
+        >
+          <dl class="divide-y divide-zinc-800">
+            <%= for {key, value} <- Decode.rows_for_result(@result) do %>
+              <div class="grid grid-cols-1 gap-1 p-3 md:grid-cols-[220px_1fr] md:gap-4">
+                <dt class="text-xs uppercase tracking-wide text-zinc-400"><%= key %></dt>
+                <dd class="break-all whitespace-pre-wrap font-mono text-sm text-zinc-100">
+                  <%= value %>
+                </dd>
+              </div>
+            <% end %>
+          </dl>
+        </div>
+      </div>
+
+      <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <h2 class="mb-3 text-lg font-medium text-zinc-200">Mempool</h2>
+        <p :if={@mempool_error} class="text-sm text-orange-300"><%= @mempool_error %></p>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
           <%= if @mempool_stats do %>
-            <dl class="grid grid-cols-2 gap-2 text-sm">
+            <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm shrink-0">
               <dt class="text-zinc-500">Pending txs</dt>
               <dd class="font-mono"><%= @mempool_stats["count"] %></dd>
               <dt class="text-zinc-500">Virtual size</dt>
               <dd class="font-mono"><%= format_vsize(@mempool_stats["vsize"]) %></dd>
             </dl>
           <% end %>
-
-          <div
-            id="fee-heatmap"
-            phx-hook="FeeHeatmap"
-            data-estimates={Jason.encode!(@fee_estimates || %{})}
-            class="w-full h-20 mt-4"
-          >
-          </div>
-
-          <%= if @mempool_recent != [] do %>
-            <div class="mt-4 overflow-x-auto">
-              <h3 class="mb-2 text-xs font-medium uppercase text-zinc-500">Recent (mempool)</h3>
-              <table class="w-full text-left text-xs">
-                <thead class="text-zinc-500">
-                  <tr>
-                    <th class="pb-1 pr-2">Txid</th>
-                    <th class="pb-1 pr-2">Fee rate</th>
-                    <th class="pb-1">Size</th>
-                  </tr>
-                </thead>
-                <tbody class="font-mono text-zinc-300">
-                  <%= for tx <- @mempool_recent do %>
-                    <% vsize = max(Map.get(tx, "vsize", 0) || 0, 1) %>
-                    <% fee = Map.get(tx, "fee", 0) || 0 %>
-                    <% fr = Float.round(fee / vsize, 1) %>
-                    <tr class="border-t border-zinc-800/80">
-                      <td class="py-1 pr-2">
-                        <.link
-                          navigate={~p"/tx/#{tx["txid"]}"}
-                          class="text-[#f7931a] hover:underline"
-                          title={tx["txid"]}
-                        >
-                          <%= truncate_mempool_txid(tx["txid"]) %>
-                        </.link>
-                      </td>
-                      <td class={"py-1 pr-2 #{recent_fee_rate_class(fr, @fee_estimates)}"}>
-                        <%= :erlang.float_to_binary(fr, decimals: 1) %> sat/vB
-                      </td>
-                      <td class="py-1 text-zinc-400"><%= vsize %> vB</td>
-                    </tr>
-                  <% end %>
-                </tbody>
-              </table>
-            </div>
-          <% end %>
-        </div>
-
-        <div class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-          <h2 class="mb-3 text-lg font-medium text-zinc-200">Fee estimates (sat/vB)</h2>
-          <div class="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
-            <%= for {label, target} <- [{"Next", 1}, {"3 blk", 3}, {"6 blk", 6}, {"~1d", 144}] do %>
+          <div class="flex flex-wrap gap-2 text-sm flex-1">
+            <%= for {label, target} <- MempoolFeeDisplay.rows(@fee_estimates) do %>
               <div class="rounded-lg bg-zinc-950 p-2">
                 <div class="text-xs text-zinc-500"><%= label %></div>
                 <div class={"mt-1 font-mono #{fee_class(fee_at(@fee_estimates, target))}"}>
@@ -920,6 +951,43 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             <% end %>
           </div>
         </div>
+
+        <%= if @mempool_recent != [] do %>
+          <div class="mt-4 overflow-x-auto">
+            <h3 class="mb-2 text-xs font-medium uppercase text-zinc-500">Recent (mempool)</h3>
+            <table class="w-full text-left text-xs">
+              <thead class="text-zinc-500">
+                <tr>
+                  <th class="pb-1 pr-2">Txid</th>
+                  <th class="pb-1 pr-2">Fee rate</th>
+                  <th class="pb-1">Size</th>
+                </tr>
+              </thead>
+              <tbody class="font-mono text-zinc-300">
+                <%= for tx <- @mempool_recent do %>
+                  <% vsize = max(Map.get(tx, "vsize", 0) || 0, 1) %>
+                  <% fee = Map.get(tx, "fee", 0) || 0 %>
+                  <% fr = Float.round(fee / vsize, 1) %>
+                  <tr class="border-t border-zinc-800/80">
+                    <td class="py-1 pr-2">
+                      <.link
+                        navigate={~p"/tx/#{tx["txid"]}"}
+                        class="text-[#f7931a] hover:underline"
+                        title={tx["txid"]}
+                      >
+                        <%= truncate_mempool_txid(tx["txid"]) %>
+                      </.link>
+                    </td>
+                    <td class={"py-1 pr-2 #{recent_fee_rate_class(fr, @fee_estimates)}"}>
+                      <%= :erlang.float_to_binary(fr, decimals: 1) %> sat/vB
+                    </td>
+                    <td class="py-1 text-zinc-400"><%= vsize %> vB</td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          </div>
+        <% end %>
       </section>
 
       <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
@@ -977,66 +1045,47 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         </div>
       </section>
 
-      <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 md:p-6">
-        <h2 class="mb-3 text-lg font-medium text-zinc-200">Decode locally</h2>
-        <p class="mb-3 text-sm text-zinc-400">
-          Paste a Bitcoin address, BOLT11 Lightning invoice, or base64 PSBT — decoded with Bitcoinex (no chain lookup).
-        </p>
-        <form id="decode-form" phx-change="decode" class="space-y-3">
-          <label class="text-sm font-medium text-zinc-300">Input</label>
-          <div class="flex gap-2 items-start">
-            <textarea
-              id="decode-input"
-              name="input"
-              rows="5"
-              phx-debounce="300"
-              class="min-w-0 flex-1 rounded-xl border border-zinc-700 bg-zinc-950 p-3 font-mono text-sm leading-6 text-zinc-100 outline-none ring-[#f7931a] placeholder:text-zinc-500 focus:ring-1"
-              placeholder="bc1q…, lnbc…, cHNidP8BA…"
-            ><%= @input %></textarea>
-            <div
-              id="decode-qr-scan"
-              phx-hook="QrScan"
-              phx-update="ignore"
-              data-target-selector="#decode-input"
-              data-after-scan="decode-change"
-              class="shrink-0 md:hidden"
-            >
-              <button
-                type="button"
-                data-qr-trigger
-                aria-label="Scan QR code"
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-600 bg-zinc-900 text-zinc-300 hover:border-[#f7931a] hover:text-[#f7931a]"
-              >
-                <.qr_scan_icon />
-              </button>
-            </div>
+      <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+        <h2 class="mb-3 text-lg font-medium text-zinc-200">Lightning Network</h2>
+        <%= if @channel_stats do %>
+          <div class="mb-3 flex flex-wrap gap-3 text-sm">
+            <span class="text-zinc-500">
+              Nodes <span class="font-mono text-zinc-200"><%= @channel_stats.node_count %></span>
+            </span>
+            <span class="text-zinc-600">·</span>
+            <span class="text-zinc-500">
+              Channels
+              <span class="font-mono text-zinc-200"><%= @channel_stats.channel_count %></span>
+            </span>
+            <span class="text-zinc-600">·</span>
+            <span class="text-zinc-500">
+              Capacity
+              <span class="font-mono text-zinc-200">
+                <%= @channel_stats.total_capacity_btc %> BTC
+              </span>
+            </span>
           </div>
-        </form>
-
-        <p
-          :if={@error}
-          id="decode-error"
-          class="mt-3 rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 text-sm text-orange-300"
-        >
-          <%= @error %>
-        </p>
-
+        <% end %>
         <div
-          :if={@result}
-          id="decode-result"
-          class="mt-4 overflow-hidden rounded-xl border border-zinc-700"
+          id="home-lightning-graph"
+          phx-hook="LightningGraph"
+          data-graph={@graph_json}
+          class="relative w-full h-[500px] border border-zinc-800 rounded"
         >
-          <dl class="divide-y divide-zinc-800">
-            <%= for {key, value} <- Decode.rows_for_result(@result) do %>
-              <div class="grid grid-cols-1 gap-1 p-3 md:grid-cols-[220px_1fr] md:gap-4">
-                <dt class="text-xs uppercase tracking-wide text-zinc-400"><%= key %></dt>
-                <dd class="break-all whitespace-pre-wrap font-mono text-sm text-zinc-100">
-                  <%= value %>
-                </dd>
-              </div>
-            <% end %>
-          </dl>
         </div>
+        <div class="mt-2 flex items-center gap-6 text-xs text-zinc-500">
+          <div class="flex items-center gap-2">
+            <svg width="32" height="16" viewBox="0 0 32 16">
+              <circle cx="6" cy="8" r="4" fill="#52525b" />
+              <circle cx="22" cy="8" r="9" fill="#52525b" />
+            </svg>
+            <span>Node size = channel capacity</span>
+          </div>
+          <span>Hover a node for details</span>
+        </div>
+        <p class="text-xs text-zinc-500 mt-1">
+          Top 100 nodes by liquidity. Data sourced from mempool.space.
+        </p>
       </section>
     </div>
     """
@@ -1618,11 +1667,21 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         id="lightning-graph"
         phx-hook="LightningGraph"
         data-graph={@graph_json}
-        class="relative w-full h-96 border border-zinc-700 rounded"
+        class="relative w-full h-[500px] border border-zinc-700 rounded"
       >
       </div>
 
-      <p class="text-xs text-zinc-500 mt-2">
+      <div class="mt-2 flex items-center gap-6 text-xs text-zinc-500">
+        <div class="flex items-center gap-2">
+          <svg width="32" height="16" viewBox="0 0 32 16">
+            <circle cx="6" cy="8" r="4" fill="#52525b" />
+            <circle cx="22" cy="8" r="9" fill="#52525b" />
+          </svg>
+          <span>Node size = channel capacity</span>
+        </div>
+        <span>Hover a node for details</span>
+      </div>
+      <p class="text-xs text-zinc-500 mt-1">
         Top 100 nodes by liquidity. Data sourced from mempool.space.
       </p>
     </section>

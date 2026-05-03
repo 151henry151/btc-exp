@@ -5,6 +5,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.16] - 2026-05-03
+
+- Add **`MempoolFeeDisplay`** and show **3 blk** / **6 blk** on the home mempool fee strip only when their sat/vB estimate differs from **Next**.
+- Lay out the fee strip with **`flex flex-wrap`** so two to four cards align when optional targets are hidden.
+- Reformat **`ChannelsCache`** Tesla **`get`** call and **`ExplorerLive`** Lightning stats / caption markup (whitespace only).
+
+## [0.4.15] - 2026-05-03
+
+- **`/channels`**: Fetch real channel edges between top-100 nodes via
+  `Task.async_stream` in **`ChannelsCache`** (10 concurrent requests, 15s timeout,
+  400-edge cap sorted by capacity); feed edges into D3 **`forceLink`** in
+  **`LightningGraph`** hook so node position reflects actual network topology.
+- **`LightningGraph.from_data/2`**: new function accepting nodes + edges; edges
+  filtered to top-100 set and mapped for D3 consumption.
+- Increase canvas height to **500px**; edge line width encodes channel capacity.
+
 ## [0.4.14] - 2026-05-03
 
 - Run **`assign_async`** for address **UTXOs** from **`load_address/2`** when connected so the async task always tracks the same load path as chain lookup.

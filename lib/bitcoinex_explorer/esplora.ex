@@ -279,6 +279,7 @@ defmodule BitcoinexExplorer.Esplora do
   @impl true
   def address_utxos(addr) when is_binary(addr) do
     enc = URI.encode(addr, &URI.char_unreserved?/1)
-    get_json("/address/#{enc}/utxo")
+    # Bypass EsploraHttpGate — called from assign_async, not the dashboard pipeline.
+    fetch_json_with_retries("/address/#{enc}/utxo", 1)
   end
 end

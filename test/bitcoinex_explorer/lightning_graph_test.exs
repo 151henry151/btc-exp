@@ -62,6 +62,31 @@ defmodule BitcoinexExplorer.LightningGraphTest do
     assert stats.total_capacity_btc =~ "."
   end
 
+  test "from_data/2 includes filtered edges in output" do
+    pk_a = String.duplicate("a", 66)
+    pk_b = String.duplicate("b", 66)
+    pk_c = String.duplicate("c", 66)
+
+    nodes = [
+      %{"publicKey" => pk_a, "alias" => "Node A", "capacity" => 10_000_000},
+      %{"publicKey" => pk_b, "alias" => "Node B", "capacity" => 5_000_000}
+    ]
+
+    edges = [
+      %{source: pk_a, target: pk_b, capacity: 1_000_000},
+      %{source: pk_a, target: pk_c, capacity: 500_000}
+    ]
+
+    result = LightningGraph.from_data(nodes, edges)
+
+    assert Map.has_key?(result, :edges)
+    assert length(result.edges) == 1
+    [edge] = result.edges
+    assert edge.source == pk_a
+    assert edge.target == pk_b
+    assert edge.capacity_sats == 1_000_000
+  end
+
   test "summary_stats/1 reads node_count, channel_count, and total_capacity from latest" do
     wrapped = %{
       "latest" => %{

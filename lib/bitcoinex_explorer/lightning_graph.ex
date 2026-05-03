@@ -47,6 +47,24 @@ defmodule BitcoinexExplorer.LightningGraph do
 
   defp pubkey_fallback(_), do: "…"
 
+  @spec from_data(list(), list()) :: %{nodes: [map()], edges: [map()]}
+  def from_data(nodes, edges) when is_list(nodes) and is_list(edges) do
+    %{nodes: sorted_nodes} = from_nodes(nodes)
+
+    node_ids = MapSet.new(sorted_nodes, & &1.id)
+
+    mapped_edges =
+      edges
+      |> Enum.filter(fn e ->
+        MapSet.member?(node_ids, e.source) and MapSet.member?(node_ids, e.target)
+      end)
+      |> Enum.map(fn e ->
+        %{source: e.source, target: e.target, capacity_sats: e.capacity}
+      end)
+
+    %{nodes: sorted_nodes, edges: mapped_edges}
+  end
+
   @spec summary_stats(map()) :: %{
           node_count: integer(),
           channel_count: integer(),
