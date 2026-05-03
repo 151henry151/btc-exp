@@ -110,10 +110,27 @@ function parseTxData(el) {
 
 export const TxFlowGraph = {
   mounted() {
+    this._resizeQueued = false
+    this._onResize = () => {
+      if (this._resizeQueued) return
+      this._resizeQueued = true
+      requestAnimationFrame(() => {
+        this._resizeQueued = false
+        this.redraw()
+      })
+    }
     this.redraw()
+    this._ro = new ResizeObserver(this._onResize)
+    this._ro.observe(this.el)
   },
   updated() {
     this.redraw()
+  },
+  destroyed() {
+    if (this._ro) {
+      this._ro.disconnect()
+      this._ro = null
+    }
   },
   redraw() {
     const { inputs = [], outputs = [] } = parseTxData(this.el)
@@ -126,14 +143,15 @@ export const TxFlowGraph = {
         ...outputs.map((o) => o.value_sats || 0)
       ) || 1
 
-    const pad = 16
-    const colW = 140
-    const midW = 72
+    const pad = 20
+    const minW = 400
+    const measured = Math.floor(this.el.getBoundingClientRect().width)
+    const width = measured > 48 ? measured : minW
+
     const rowH = outputs.length >= 4 ? 46 : 36
     const hIn = Math.max(inputs.length * rowH + pad * 2, 120)
     const hOut = Math.max(outputs.length * rowH + pad * 2, 120)
     const height = Math.max(hIn, hOut, 160)
-    const width = colW + midW + colW + pad * 4
 
     const svg = d3
       .select(this.el)
@@ -141,10 +159,11 @@ export const TxFlowGraph = {
       .attr("width", width)
       .attr("height", height)
       .attr("viewBox", `0 0 ${width} ${height}`)
+      .style("display", "block")
 
     const g = svg.append("g")
 
-    const cx = pad + colW + midW / 2
+    const cx = width / 2
     const cy = height / 2
 
     g.append("rect")
@@ -169,18 +188,17 @@ export const TxFlowGraph = {
 
     function strokeFor(val) {
       const r = val / maxVal
-      return 1 + r * 7
+      return 0.9 + r * 2.2
     }
 
     inputs.forEach((inp, i) => {
       const y = pad + i * rowH + rowH / 2
-      const x1 = pad + colW
       const label = truncateAddr(inp.address)
       const color = COLORS[inp.type] || COLORS.unknown
 
       const inStroke =
         inp.type === "coinbase"
-          ? Math.max(2, strokeFor(inp.value_sats || 0))
+          ? Math.max(1.1, strokeFor(inp.value_sats || 0))
           : strokeFor(inp.value_sats || 0)
 
       g.append("line")
@@ -190,6 +208,7 @@ export const TxFlowGraph = {
         .attr("y2", cy)
         .attr("stroke", "#52525b")
         .attr("stroke-width", inStroke)
+        .attr("stroke-linecap", "round")
 
       const ng = g.append("g").style("cursor", inp.address && inp.address !== "Coinbase" ? "pointer" : "default")
 
@@ -222,6 +241,7 @@ export const TxFlowGraph = {
         .attr("y2", y)
         .attr("stroke", "#52525b")
         .attr("stroke-width", strokeFor(out.value_sats || 0))
+        .attr("stroke-linecap", "round")
 
       const ng = g.append("g").style("cursor", outNavigable ? "pointer" : "default")
 
