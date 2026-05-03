@@ -5,6 +5,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.20] - 2026-05-03
+
+- Remove the **`Channels`** header link and the standalone **`ExplorerLive`** **`:channels`** route; Lightning content remains on the home page only.
+- Add **`ChannelsRedirectController`**: **`GET /channels`** redirects to **`/`** for old bookmarks.
+- Point Playwright **`channels`** specs at the home Lightning block and the redirect.
+
 ## [0.4.19] - 2026-05-03
 
 - **`ExplorerLive`** home **Search** / **Decode**: drop the **`sm`** breakpoint grid (which still applied below **640px** CSS width, e.g. zoomed or narrow viewports) in favor of **`inline-flex flex-wrap`** with **`shrink-0`** buttons so width follows content at any zoom.

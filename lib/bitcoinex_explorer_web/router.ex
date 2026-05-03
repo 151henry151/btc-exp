@@ -18,6 +18,7 @@ defmodule BitcoinexExplorerWeb.Router do
     pipe_through :browser
 
     get "/block/height/:height", BlockHeightController, :redirect_to_block
+    get "/channels", ChannelsRedirectController, :redirect_to_home
 
     live_session :explorer,
       on_mount: [] do
@@ -25,7 +26,6 @@ defmodule BitcoinexExplorerWeb.Router do
       live "/block/:hash", ExplorerLive, :block
       live "/tx/:txid", ExplorerLive, :tx
       live "/address/:address", ExplorerLive, :address
-      live "/channels", ExplorerLive, :channels
     end
   end
 

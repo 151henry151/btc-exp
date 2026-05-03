@@ -95,7 +95,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
         :tx -> Map.get(params, "txid", "")
         :block -> truncate_nav(Map.get(params, "hash", ""))
         :address -> Map.get(params, "address", "")
-        :channels -> ""
         _ -> ""
       end
 
@@ -131,13 +130,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
           :address ->
             load_address(socket, Map.get(params, "address"))
-
-          :channels ->
-            if connected?(socket) do
-              assign_channels_data(socket)
-            else
-              assign(socket, channel_stats: nil, graph_json: "null")
-            end
         end
       rescue
         e ->
@@ -175,8 +167,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   defp page_title_for(:address, %{"address" => a}),
     do: "Address #{truncate_middle(a, 16)} · Bitcoinex Explorer"
-
-  defp page_title_for(:channels, _), do: "Lightning Network Channels · Bitcoinex Explorer"
 
   defp page_title_for(_, _), do: "Bitcoinex Explorer"
 
@@ -716,7 +706,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
   def handle_info(:channels_retry, socket) do
     socket =
-      if socket.assigns.live_action in [:home, :channels] do
+      if socket.assigns.live_action == :home do
         assign_channels_data(socket)
       else
         socket
@@ -748,8 +738,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             <.tx_view {assigns} />
           <% :address -> %>
             <.address_view {assigns} />
-          <% :channels -> %>
-            <.channels_view {assigns} />
         <% end %>
       </main>
 
@@ -789,13 +777,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
       <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-3 md:gap-4 md:px-6">
         <.link navigate={~p"/"} class="shrink-0 text-lg font-semibold text-[#f7931a]">
           Bitcoinex Explorer
-        </.link>
-
-        <.link
-          navigate={~p"/channels"}
-          class="hidden shrink-0 text-sm text-zinc-400 hover:text-[#f7931a] md:inline-block"
-        >
-          Channels
         </.link>
 
         <form
@@ -1642,57 +1623,6 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           </.async_result>
         </section>
       <% end %>
-    </div>
-    """
-  end
-
-  defp channels_view(assigns) do
-    ~H"""
-    <section id="channels-page">
-      <h2 class="text-xl font-semibold mb-4">Lightning Network — Top 100 Nodes</h2>
-
-      <div class="grid grid-cols-3 gap-4 mb-6">
-        <.stat_card label="Nodes" value={if @channel_stats, do: @channel_stats.node_count, else: "—"} />
-        <.stat_card
-          label="Channels"
-          value={if @channel_stats, do: @channel_stats.channel_count, else: "—"}
-        />
-        <.stat_card
-          label="Total capacity"
-          value={if @channel_stats, do: "#{@channel_stats.total_capacity_btc} BTC", else: "—"}
-        />
-      </div>
-
-      <div
-        id="lightning-graph"
-        phx-hook="LightningGraph"
-        data-graph={@graph_json}
-        class="relative w-full h-[500px] border border-zinc-700 rounded"
-      >
-      </div>
-
-      <div class="mt-2 flex items-center gap-6 text-xs text-zinc-500">
-        <div class="flex items-center gap-2">
-          <svg width="32" height="16" viewBox="0 0 32 16">
-            <circle cx="6" cy="8" r="4" fill="#52525b" />
-            <circle cx="22" cy="8" r="9" fill="#52525b" />
-          </svg>
-          <span>Node size = channel capacity</span>
-        </div>
-        <span>Hover a node for details</span>
-      </div>
-      <p class="text-xs text-zinc-500 mt-1">
-        Top 100 nodes by liquidity. Data sourced from mempool.space.
-      </p>
-    </section>
-    """
-  end
-
-  defp stat_card(assigns) do
-    ~H"""
-    <div class="rounded-lg border border-zinc-800 bg-zinc-950 p-3">
-      <div class="text-xs text-zinc-500"><%= @label %></div>
-      <div class="mt-1 font-mono text-lg text-zinc-100"><%= @value %></div>
     </div>
     """
   end

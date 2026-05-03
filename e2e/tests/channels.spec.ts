@@ -1,19 +1,21 @@
 import { test, expect } from "@playwright/test";
 
-test("channels page renders heading", async ({ page }) => {
+test("/channels redirects to home", async ({ page }) => {
   await page.goto("./channels");
-  await expect(page.locator("h2")).toContainText(/lightning/i);
+  await expect(page).not.toHaveURL(/\/channels\/?$/);
+  await expect(page.locator("#home-action-form")).toBeVisible();
 });
 
-test("channels page has stat cards", async ({ page }) => {
-  await page.goto("./channels");
-  const section = page.locator("#channels-page");
+test("home page shows Lightning Network heading and graph", async ({ page }) => {
+  await page.goto("./");
+  await expect(page.getByRole("heading", { name: /Lightning Network/i })).toBeVisible();
+  await expect(page.locator("#home-lightning-graph")).toBeVisible();
+});
+
+test("home Lightning section shows stats labels when cache is warm", async ({ page }) => {
+  await page.goto("./");
+  const section = page.locator("section").filter({ hasText: "Lightning Network" }).first();
   await expect(section.getByText("Nodes", { exact: true })).toBeVisible();
   await expect(section.getByText("Channels", { exact: true })).toBeVisible();
-  await expect(section.getByText("Total capacity", { exact: true })).toBeVisible();
-});
-
-test("channels page graph element is present", async ({ page }) => {
-  await page.goto("./channels");
-  await expect(page.locator("#lightning-graph")).toBeVisible();
+  await expect(section.getByText("Capacity", { exact: true })).toBeVisible();
 });
