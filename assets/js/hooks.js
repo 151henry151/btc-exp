@@ -543,7 +543,7 @@ export const LightningGraph = {
     }
 
     const nodes = Array.isArray(payload.nodes) ? payload.nodes : []
-    const edges = Array.isArray(payload.edges) ? payload.edges : []
+    const rawEdges = Array.isArray(payload.edges) ? payload.edges : []
     if (nodes.length === 0) {
       const msg = document.createElement("div")
       msg.className = "flex h-full items-center justify-center text-sm text-zinc-500"
@@ -552,11 +552,18 @@ export const LightningGraph = {
       return
     }
 
+    const normPk = (pk) => String(pk || "").trim().toLowerCase()
+
     const width = Math.max(this.el.clientWidth || 600, 280)
     const rect = this.el.getBoundingClientRect()
     const height = Math.max(rect.height > 0 ? rect.height : 500, 300)
 
-    const svg = d3.select(this.el).append("svg").attr("width", width).attr("height", height)
+    const svg = d3
+      .select(this.el)
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .style("display", "block")
 
     const caps = nodes.map((d) => d.capacity_sats || 0)
     const capMin = Math.min(...caps)
@@ -567,27 +574,48 @@ export const LightningGraph = {
 
     const color = d3.scaleOrdinal(d3.schemeTableau10)
 
-    const simulationNodes = nodes.map((d, i) => ({
-      ...d,
-      r: rScale(Math.max(d.capacity_sats || 1, 1)),
-      color: color(i % 10),
-    }))
+    const simulationNodes = nodes.map((d, i) => {
+      const id = normPk(d.id)
+      const jitter = 36
+      return {
+        ...d,
+        id,
+        r: rScale(Math.max(d.capacity_sats || 1, 1)),
+        color: color(i % 10),
+        x: width / 2 + (Math.random() - 0.5) * jitter,
+        y: height / 2 + (Math.random() - 0.5) * jitter,
+      }
+    })
 
-    const maxR = 18
+    const nodeIdSet = new Set(simulationNodes.map((d) => d.id))
+
+    const linkRows = rawEdges
+      .map((e) => {
+        const s = normPk(e.source)
+        const t = normPk(e.target)
+        const cap = e.capacity_sats ?? e.capacity ?? 0
+        return { source: s, target: t, capacity_sats: cap }
+      })
+      .filter((e) => e.source && e.target && e.source !== e.target && nodeIdSet.has(e.source) && nodeIdSet.has(e.target))
+
+    const maxR = 20
     const cx = (x) => Math.max(maxR, Math.min(width - maxR, x == null ? width / 2 : x))
     const cy = (y) => Math.max(maxR, Math.min(height - maxR, y == null ? height / 2 : y))
 
-    const edgeCapMax = Math.max(...edges.map((e) => e.capacity_sats || 0), 1)
+    const edgeCapMax = Math.max(1, ...linkRows.map((e) => e.capacity_sats || 0))
 
     const edgeSelection = svg
       .append("g")
       .attr("class", "edges")
       .selectAll("line")
-      .data(edges)
+      .data(linkRows)
       .join("line")
-      .attr("stroke", "#3f3f46")
-      .attr("stroke-opacity", 0.5)
-      .attr("stroke-width", (d) => 0.5 + (d.capacity_sats / edgeCapMax) * 2.5)
+      .attr("stroke", "#71717a")
+      .attr("stroke-opacity", 0.75)
+      .attr("stroke-width", (d) => {
+        const c = d.capacity_sats || 0
+        return 0.8 + (c / edgeCapMax) * 2.2
+      })
 
     const layer = svg.append("g")
 
@@ -633,15 +661,16 @@ export const LightningGraph = {
       })
       .on("mouseleave", () => tooltip.classed("hidden", true))
 
-    const linkForce = d3.forceLink(edges).id((d) => d.id).distance(60).strength(0.3)
+    const linkForce = d3.forceLink(linkRows).id((d) => d.id).distance(72).strength(0.55)
 
     const sim = d3
       .forceSimulation(simulationNodes)
       .force("link", linkForce)
-      .force("charge", d3.forceManyBody().strength(-60))
-      .force("center", d3.forceCenter(width / 2, height / 2).strength(0.05))
-      .force("collide", d3.forceCollide((d) => d.r + 2))
+      .force("charge", d3.forceManyBody().strength(-95))
+      .force("center", d3.forceCenter(width / 2, height / 2).strength(0.22))
+      .force("collide", d3.forceCollide((d) => d.r + 3).strength(0.85))
       .alphaDecay(0.02)
+      .alphaMin(0.035)
       .on("tick", () => {
         edgeSelection
           .attr("x1", (d) => cx(d.source.x))

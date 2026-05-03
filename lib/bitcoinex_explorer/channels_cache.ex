@@ -7,6 +7,8 @@ defmodule BitcoinexExplorer.ChannelsCache do
 
   alias Tesla.Env
 
+  alias BitcoinexExplorer.LightningGraph
+
   @ttl_ms 10 * 60 * 1000
 
   def start_link(opts),
@@ -82,7 +84,8 @@ defmodule BitcoinexExplorer.ChannelsCache do
 
       top_pubkeys =
         nodes
-        |> Enum.map(&(Map.get(&1, "publicKey") || ""))
+        |> Enum.map(&LightningGraph.normalize_public_key(Map.get(&1, "publicKey") || ""))
+        |> Enum.reject(&(&1 == ""))
         |> MapSet.new()
 
       edges = fetch_edges(nodes, client, top_pubkeys)
@@ -104,9 +107,13 @@ defmodule BitcoinexExplorer.ChannelsCache do
     nodes
     |> Task.async_stream(
       fn node ->
-        pk = Map.get(node, "publicKey") || ""
+        pk = LightningGraph.normalize_public_key(Map.get(node, "publicKey") || "")
 
-        case Tesla.get(client, "/api/v1/lightning/nodes/#{pk}/channels", query: [status: "open"]) do
+        case Tesla.get(
+               client,
+               "/api/v1/lightning/nodes/#{URI.encode(pk, &URI.char_unreserved?/1)}/channels",
+               query: [status: "open"]
+             ) do
           {:ok, %Env{status: 200, body: body}} ->
             channels = Map.get(body, "channels") || List.wrap(body)
             extract_edges(channels, top_pubkeys)
@@ -128,8 +135,16 @@ defmodule BitcoinexExplorer.ChannelsCache do
 
   defp extract_edges(channels, top_pubkeys) when is_list(channels) do
     Enum.flat_map(channels, fn ch ->
-      n1 = Map.get(ch, "node1_public_key") || Map.get(ch, "node1PublicKey") || ""
-      n2 = Map.get(ch, "node2_public_key") || Map.get(ch, "node2PublicKey") || ""
+      n1 =
+        LightningGraph.normalize_public_key(
+          Map.get(ch, "node1_public_key") || Map.get(ch, "node1PublicKey") || ""
+        )
+
+      n2 =
+        LightningGraph.normalize_public_key(
+          Map.get(ch, "node2_public_key") || Map.get(ch, "node2PublicKey") || ""
+        )
+
       cap = Map.get(ch, "capacity") || 0
 
       if MapSet.member?(top_pubkeys, n1) and MapSet.member?(top_pubkeys, n2) and n1 != n2 do

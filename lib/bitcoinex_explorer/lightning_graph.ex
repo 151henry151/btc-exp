@@ -7,11 +7,18 @@ defmodule BitcoinexExplorer.LightningGraph do
 
   @max_label_length 20
 
+  @doc """
+  Normalizes Lightning node pubkeys for stable matching (mempool APIs may mix case).
+  """
+  @spec normalize_public_key(String.t() | any()) :: String.t()
+  def normalize_public_key(pk) when is_binary(pk), do: pk |> String.trim() |> String.downcase()
+  def normalize_public_key(_), do: ""
+
   @spec from_nodes(list()) :: %{nodes: [map()]}
   def from_nodes(nodes) when is_list(nodes) do
     mapped =
       Enum.map(nodes, fn node ->
-        pk = Map.get(node, "publicKey") || Map.get(node, :publicKey) || ""
+        pk = normalize_public_key(Map.get(node, "publicKey") || Map.get(node, :publicKey) || "")
         cap = Map.get(node, "capacity") || Map.get(node, :capacity) || 0
 
         label =
@@ -55,14 +62,33 @@ defmodule BitcoinexExplorer.LightningGraph do
 
     mapped_edges =
       edges
+      |> Enum.map(&normalize_edge_endpoints/1)
       |> Enum.filter(fn e ->
-        MapSet.member?(node_ids, e.source) and MapSet.member?(node_ids, e.target)
-      end)
-      |> Enum.map(fn e ->
-        %{source: e.source, target: e.target, capacity_sats: e.capacity}
+        e.source != "" and e.target != "" and e.source != e.target and
+          MapSet.member?(node_ids, e.source) and MapSet.member?(node_ids, e.target)
       end)
 
     %{nodes: sorted_nodes, edges: mapped_edges}
+  end
+
+  defp normalize_edge_endpoints(e) when is_map(e) do
+    s =
+      normalize_public_key(
+        Map.get(e, :source) || Map.get(e, "source") || Map.get(e, :node1_public_key) ||
+          Map.get(e, "node1_public_key") || ""
+      )
+
+    t =
+      normalize_public_key(
+        Map.get(e, :target) || Map.get(e, "target") || Map.get(e, :node2_public_key) ||
+          Map.get(e, "node2_public_key") || ""
+      )
+
+    cap =
+      Map.get(e, :capacity) || Map.get(e, "capacity") || Map.get(e, :capacity_sats) ||
+        Map.get(e, "capacity_sats") || 0
+
+    %{source: s, target: t, capacity_sats: cap}
   end
 
   @spec summary_stats(map()) :: %{

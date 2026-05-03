@@ -62,6 +62,27 @@ defmodule BitcoinexExplorer.LightningGraphTest do
     assert stats.total_capacity_btc =~ "."
   end
 
+  test "from_data/2 matches edges when pubkey casing differs from node list" do
+    pk_a = String.duplicate("d", 66)
+    pk_b = String.duplicate("e", 66)
+
+    nodes = [
+      %{"publicKey" => pk_a, "alias" => "A", "capacity" => 2_000_000},
+      %{"publicKey" => pk_b, "alias" => "B", "capacity" => 1_000_000}
+    ]
+
+    edges = [
+      %{source: String.upcase(pk_a), target: pk_b, capacity: 75_000}
+    ]
+
+    %{edges: out} = LightningGraph.from_data(nodes, edges)
+    assert length(out) == 1
+    e = hd(out)
+    assert e.source == String.downcase(pk_a)
+    assert e.target == String.downcase(pk_b)
+    assert e.capacity_sats == 75_000
+  end
+
   test "from_data/2 includes filtered edges in output" do
     pk_a = String.duplicate("a", 66)
     pk_b = String.duplicate("b", 66)

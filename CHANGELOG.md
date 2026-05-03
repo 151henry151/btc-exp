@@ -5,6 +5,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.24] - 2026-05-03
+
+- **`LightningGraph`**: add **`normalize_public_key/1`** and use it for node **`id`**s and **`from_data/2`** edge endpoints so mempool channel keys match ranking nodes even when casing differs.
+- **`ChannelsCache`**: normalize pubkeys for **`top_pubkeys`**, channel fetches, and **`extract_edges/2`**; **`URI.encode`** node keys in Tesla paths.
+- **`LightningGraph` hook** (**`hooks.js`**): normalize ids/links in the client, filter links to known nodes, seed near-center positions, strengthen **link/center/collide** forces, and draw slightly brighter edges with safe stroke widths.
+
 ## [0.4.23] - 2026-05-03
 
 - **`ExplorerLive`** address UTXOs: fix **`async_result`** inner block to use the **list** returned for **`assign_async(:utxos, …)`** (not **`r.utxos`**, which crashed after load and could remount in a loop); show a short **failed** message when the async errors.
