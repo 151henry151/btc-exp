@@ -136,81 +136,90 @@ export const TxFlowGraph = {
     const { inputs = [], outputs = [] } = parseTxData(this.el)
     d3.select(this.el).selectAll("svg").remove()
 
-    const maxVal =
-      Math.max(
-        1,
-        ...inputs.map((i) => i.value_sats || 0),
-        ...outputs.map((o) => o.value_sats || 0)
-      ) || 1
-
-    const pad = 20
-    const minW = 400
     const measured = Math.floor(this.el.getBoundingClientRect().width)
-    const width = measured > 48 ? measured : minW
+    const width = measured > 48 ? measured : 400
 
-    const rowH = outputs.length >= 4 ? 46 : 36
-    const hIn = Math.max(inputs.length * rowH + pad * 2, 120)
-    const hOut = Math.max(outputs.length * rowH + pad * 2, 120)
-    const height = Math.max(hIn, hOut, 160)
+    const pad = 16
+    const rowH = 30
+    const txH = 26
+    const txW = 54
+    const txGap = 14
+
+    const inputsH = Math.max(inputs.length, 1) * rowH
+    const outputsH = Math.max(outputs.length, 1) * rowH
+    const totalH = inputsH + txGap + txH + txGap + outputsH
+
+    const txY = inputsH + txGap
+    const txCx = width / 2
+    const outStartY = txY + txH + txGap
+    const txid = this.el.dataset.txid || ""
+    const txLabel = txid.length >= 8 ? txid.slice(0, 8) + "…" : (txid || "TX")
+
+    const maxVal = Math.max(
+      1,
+      ...inputs.map((i) => i.value_sats || 0),
+      ...outputs.map((o) => o.value_sats || 0)
+    )
 
     const svg = d3
       .select(this.el)
       .append("svg")
       .attr("width", width)
-      .attr("height", height)
-      .attr("viewBox", `0 0 ${width} ${height}`)
+      .attr("height", totalH)
+      .attr("viewBox", `0 0 ${width} ${totalH}`)
       .style("display", "block")
 
-    const g = svg.append("g")
+    const linesG = svg.append("g")
+    const nodesG = svg.append("g")
 
-    const cx = width / 2
-    const cy = height / 2
-
-    g.append("rect")
-      .attr("x", cx - 28)
-      .attr("y", cy - 18)
-      .attr("width", 56)
-      .attr("height", 36)
-      .attr("rx", 6)
+    // Short centered TX cell; wider when txid label is shown.
+    const txW2 = txid ? 100 : txW
+    nodesG.append("rect")
+      .attr("x", txCx - txW2 / 2)
+      .attr("y", txY)
+      .attr("width", txW2)
+      .attr("height", txH)
+      .attr("rx", 5)
       .attr("fill", "#27272a")
       .attr("stroke", "#f7931a")
 
-    g.append("text")
-      .attr("x", cx)
-      .attr("y", cy + 5)
+    nodesG.append("text")
+      .attr("x", txCx)
+      .attr("y", txY + txH / 2 + 4)
       .attr("text-anchor", "middle")
-      .attr("fill", "#fafafa")
-      .attr("font-size", "13px")
-      .attr("font-weight", "600")
-      .text("TX")
+      .attr("fill", "#f7931a")
+      .attr("font-size", "10px")
+      .attr("font-family", "ui-monospace, monospace")
+      .text(txLabel)
+
+    function strokeFor(val) {
+      return 0.9 + (val / maxVal) * 2.2
+    }
 
     const hook = this
 
-    function strokeFor(val) {
-      const r = val / maxVal
-      return 0.9 + r * 2.2
-    }
-
+    // Inputs above TX (circles left, labels right).
     inputs.forEach((inp, i) => {
-      const y = pad + i * rowH + rowH / 2
+      const y = i * rowH + rowH / 2
       const label = truncateAddr(inp.address)
       const color = COLORS[inp.type] || COLORS.unknown
-
-      const inStroke =
+      const stroke =
         inp.type === "coinbase"
           ? Math.max(1.1, strokeFor(inp.value_sats || 0))
           : strokeFor(inp.value_sats || 0)
 
-      g.append("line")
-        .attr("x1", pad)
+      linesG.append("line")
+        .attr("x1", pad + 8)
         .attr("y1", y)
-        .attr("x2", cx - 28)
-        .attr("y2", cy)
+        .attr("x2", txCx)
+        .attr("y2", txY)
         .attr("stroke", "#52525b")
-        .attr("stroke-width", inStroke)
+        .attr("stroke-width", stroke)
         .attr("stroke-linecap", "round")
 
-      const ng = g.append("g").style("cursor", inp.address && inp.address !== "Coinbase" ? "pointer" : "default")
+      const ng = nodesG
+        .append("g")
+        .style("cursor", inp.address && inp.address !== "Coinbase" ? "pointer" : "default")
 
       ng.append("circle").attr("cx", pad + 8).attr("cy", y).attr("r", 8).attr("fill", color)
 
@@ -227,23 +236,24 @@ export const TxFlowGraph = {
         .text(`${label} · ${inp.value_sats ?? 0} sat`)
     })
 
+    // Outputs below TX (circles right, labels left).
     outputs.forEach((out, i) => {
-      const y = pad + i * rowH + rowH / 2
+      const y = outStartY + i * rowH + rowH / 2
       const label = truncateAddr(out.address)
       const color = COLORS[out.type] || COLORS.unknown
       const outNavigable =
         out.address && out.address !== "non-standard" && out.address !== "OP_RETURN"
 
-      g.append("line")
-        .attr("x1", cx + 28)
-        .attr("y1", cy)
-        .attr("x2", width - pad)
+      linesG.append("line")
+        .attr("x1", txCx)
+        .attr("y1", txY + txH)
+        .attr("x2", width - pad - 8)
         .attr("y2", y)
         .attr("stroke", "#52525b")
         .attr("stroke-width", strokeFor(out.value_sats || 0))
         .attr("stroke-linecap", "round")
 
-      const ng = g.append("g").style("cursor", outNavigable ? "pointer" : "default")
+      const ng = nodesG.append("g").style("cursor", outNavigable ? "pointer" : "default")
 
       ng.append("circle").attr("cx", width - pad - 8).attr("cy", y).attr("r", 8).attr("fill", color)
 
@@ -905,23 +915,10 @@ export const LightningGraph = {
       .classed("min-w-max", true)
       .classed("hidden", true)
 
-    const focusPanel = d3
-      .select(hook.el)
-      .append("div")
-      .classed("absolute", true)
-      .classed("right-2", true)
-      .classed("top-2", true)
-      .classed("z-30", true)
-      .classed("max-w-[min(22rem,calc(100%-1rem))]", true)
-      .classed("rounded-lg", true)
-      .classed("border", true)
-      .classed("border-zinc-600", true)
-      .classed("bg-zinc-900/95", true)
-      .classed("p-3", true)
-      .classed("text-xs", true)
-      .classed("text-zinc-100", true)
-      .classed("shadow-lg", true)
-      .classed("hidden", true)
+    const fpEl = document.createElement("div")
+    fpEl.className = "hidden mt-2 rounded-lg border border-zinc-700 bg-zinc-900 p-3 text-xs text-zinc-100"
+    hook.el.insertAdjacentElement("afterend", fpEl)
+    const focusPanel = d3.select(fpEl)
       .style("pointer-events", "auto")
       .on("click", (e) => e.stopPropagation())
 
@@ -1111,6 +1108,7 @@ export const LightningGraph = {
 
     hook._cleanup = () => {
       if (sim) sim.stop()
+      fpEl.remove()
     }
   },
   destroyed() {

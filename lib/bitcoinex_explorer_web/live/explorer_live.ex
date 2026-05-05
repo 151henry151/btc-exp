@@ -1316,6 +1316,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             id="tx-flow-graph"
             phx-hook="TxFlowGraph"
             data-txdata={@tx_flow_json}
+            data-txid={(@tx_data || %{})["txid"] || ""}
             class="min-h-[280px] w-full overflow-auto"
           >
           </div>
@@ -1323,89 +1324,73 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
 
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
           <h2 class="mb-3 text-lg font-medium">Inputs</h2>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
-              <thead class="text-zinc-500">
-                <tr>
-                  <th class="pb-2">Prev out</th>
-                  <th class="pb-2">Value</th>
-                  <th class="pb-2">Network</th>
-                  <th class="pb-2">Type</th>
-                  <th class="pb-2">Witness ver.</th>
-                  <th class="pb-2">Program / payload</th>
-                </tr>
-              </thead>
-              <tbody class="font-mono text-zinc-300">
-                <%= for row <- @tx_enriched_vin do %>
-                  <tr class="border-t border-zinc-800 align-top">
-                    <td class="py-2">
-                      <%= if row["bx_prev_address"] != "" do %>
-                        <button
-                          type="button"
-                          phx-click="goto_address"
-                          phx-value-address={row["bx_prev_address"]}
-                          class="cursor-pointer text-left text-[#f7931a] hover:underline"
-                          title={row["bx_prev_address"]}
-                        >
-                          <%= truncate_middle(row["bx_prev_address"], 16) %>
-                        </button>
-                      <% else %>
-                        <%= row["kind"] %>
-                      <% end %>
-                    </td>
-                    <td class="py-2"><%= row["bx_prev_value_sats"] %></td>
-                    <td class="py-2"><%= row["bx_network"] %></td>
-                    <td class="py-2"><%= row["bx_address_type"] %></td>
-                    <td class="py-2"><%= row["bx_witness_version"] %></td>
-                    <td class="py-2 break-all">
-                      <%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
+          <div class="space-y-0">
+            <%= for row <- @tx_enriched_vin do %>
+              <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-zinc-800 py-3 text-xs font-mono text-zinc-300">
+                <dt class="text-zinc-500 shrink-0">Prev out</dt>
+                <dd>
+                  <%= if row["bx_prev_address"] != "" do %>
+                    <button
+                      type="button"
+                      phx-click="goto_address"
+                      phx-value-address={row["bx_prev_address"]}
+                      class="cursor-pointer text-left text-[#f7931a] hover:underline break-all"
+                      title={row["bx_prev_address"]}
+                    >
+                      <%= truncate_middle(row["bx_prev_address"], 16) %>
+                    </button>
+                  <% else %>
+                    <%= row["kind"] %>
+                  <% end %>
+                </dd>
+                <dt class="text-zinc-500">Value</dt>
+                <dd><%= row["bx_prev_value_sats"] %></dd>
+                <dt class="text-zinc-500">Network</dt>
+                <dd><%= row["bx_network"] %></dd>
+                <dt class="text-zinc-500">Type</dt>
+                <dd><%= row["bx_address_type"] %></dd>
+                <dt class="text-zinc-500">Witness ver.</dt>
+                <dd><%= row["bx_witness_version"] %></dd>
+                <dt class="text-zinc-500">Program</dt>
+                <dd class="break-all">
+                  <%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %>
+                </dd>
+              </dl>
+            <% end %>
           </div>
         </section>
 
         <section class="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
           <h2 class="mb-3 text-lg font-medium">Outputs</h2>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
-              <thead class="text-zinc-500">
-                <tr>
-                  <th class="pb-2">Address</th>
-                  <th class="pb-2">Value</th>
-                  <th class="pb-2">Network</th>
-                  <th class="pb-2">Type</th>
-                  <th class="pb-2">Witness ver.</th>
-                  <th class="pb-2">Program / payload</th>
-                </tr>
-              </thead>
-              <tbody class="font-mono text-zinc-300">
-                <%= for row <- @tx_enriched_vout do %>
-                  <tr class="border-t border-zinc-800 align-top">
-                    <td class="py-2">
-                      <button
-                        type="button"
-                        phx-click="goto_address"
-                        phx-value-address={row["scriptpubkey_address"]}
-                        class="cursor-pointer text-left text-[#f7931a] hover:underline"
-                        title={row["scriptpubkey_address"]}
-                      >
-                        <%= truncate_middle(row["scriptpubkey_address"] || "—", 16) %>
-                      </button>
-                    </td>
-                    <td class="py-2"><%= row["value"] %></td>
-                    <td class="py-2"><%= row["bx_network"] %></td>
-                    <td class="py-2"><%= row["bx_address_type"] %></td>
-                    <td class="py-2"><%= row["bx_witness_version"] %></td>
-                    <td class="py-2 break-all">
-                      <%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %>
-                    </td>
-                  </tr>
-                <% end %>
-              </tbody>
-            </table>
+          <div class="space-y-0">
+            <%= for row <- @tx_enriched_vout do %>
+              <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 border-t border-zinc-800 py-3 text-xs font-mono text-zinc-300">
+                <dt class="text-zinc-500 shrink-0">Address</dt>
+                <dd>
+                  <button
+                    type="button"
+                    phx-click="goto_address"
+                    phx-value-address={row["scriptpubkey_address"]}
+                    class="cursor-pointer text-left text-[#f7931a] hover:underline break-all"
+                    title={row["scriptpubkey_address"]}
+                  >
+                    <%= truncate_middle(row["scriptpubkey_address"] || "—", 16) %>
+                  </button>
+                </dd>
+                <dt class="text-zinc-500">Value</dt>
+                <dd><%= row["value"] %></dd>
+                <dt class="text-zinc-500">Network</dt>
+                <dd><%= row["bx_network"] %></dd>
+                <dt class="text-zinc-500">Type</dt>
+                <dd><%= row["bx_address_type"] %></dd>
+                <dt class="text-zinc-500">Witness ver.</dt>
+                <dd><%= row["bx_witness_version"] %></dd>
+                <dt class="text-zinc-500">Program</dt>
+                <dd class="break-all">
+                  <%= row["bx_witness_program_hex"] || row["bx_payload_hex"] %>
+                </dd>
+              </dl>
+            <% end %>
           </div>
         </section>
       <% end %>
