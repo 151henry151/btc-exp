@@ -83,6 +83,26 @@ defmodule BitcoinexExplorer.LightningGraphTest do
     assert e.capacity_sats == 75_000
   end
 
+  test "from_data/2 drops nodes with no edge to another listed node" do
+    pk_a = String.duplicate("m", 66)
+    pk_b = String.duplicate("n", 66)
+    pk_iso = String.duplicate("o", 66)
+
+    nodes = [
+      %{"publicKey" => pk_a, "alias" => "A", "capacity" => 9_000_000},
+      %{"publicKey" => pk_b, "alias" => "B", "capacity" => 8_000_000},
+      %{"publicKey" => pk_iso, "alias" => "Lonely", "capacity" => 7_000_000}
+    ]
+
+    edges = [%{source: pk_a, target: pk_b, capacity: 50_000}]
+
+    %{nodes: ns, edges: es} = LightningGraph.from_data(nodes, edges)
+    assert length(es) == 1
+    ids = Enum.map(ns, & &1.id) |> MapSet.new()
+    assert MapSet.equal?(ids, MapSet.new([pk_a, pk_b]))
+    refute MapSet.member?(ids, pk_iso)
+  end
+
   test "from_data/2 includes filtered edges in output" do
     pk_a = String.duplicate("a", 66)
     pk_b = String.duplicate("b", 66)

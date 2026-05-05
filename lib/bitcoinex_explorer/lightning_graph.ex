@@ -54,10 +54,14 @@ defmodule BitcoinexExplorer.LightningGraph do
 
   defp pubkey_fallback(_), do: "…"
 
+  @doc """
+  Builds graph nodes and edges from mempool-style rows.
+
+  Omits nodes that have no edge to another node in `nodes` (zero degree in this subgraph).
+  """
   @spec from_data(list(), list()) :: %{nodes: [map()], edges: [map()]}
   def from_data(nodes, edges) when is_list(nodes) and is_list(edges) do
     %{nodes: sorted_nodes} = from_nodes(nodes)
-
     node_ids = MapSet.new(sorted_nodes, & &1.id)
 
     mapped_edges =
@@ -68,7 +72,17 @@ defmodule BitcoinexExplorer.LightningGraph do
           MapSet.member?(node_ids, e.source) and MapSet.member?(node_ids, e.target)
       end)
 
-    %{nodes: sorted_nodes, edges: mapped_edges}
+    connected_ids =
+      Enum.reduce(mapped_edges, MapSet.new(), fn e, acc ->
+        acc |> MapSet.put(e.source) |> MapSet.put(e.target)
+      end)
+
+    filtered_nodes =
+      sorted_nodes
+      |> Enum.filter(&MapSet.member?(connected_ids, &1.id))
+      |> Enum.sort_by(& &1.capacity_sats, :desc)
+
+    %{nodes: filtered_nodes, edges: mapped_edges}
   end
 
   defp normalize_edge_endpoints(e) when is_map(e) do

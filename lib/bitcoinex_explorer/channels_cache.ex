@@ -109,21 +109,19 @@ defmodule BitcoinexExplorer.ChannelsCache do
       fn node ->
         pk = LightningGraph.normalize_public_key(Map.get(node, "publicKey") || "")
 
-        case Tesla.get(
-               client,
-               "/api/v1/lightning/nodes/#{URI.encode(pk, &URI.char_unreserved?/1)}/channels",
-               query: [status: "open"]
-             ) do
-          {:ok, %Env{status: 200, body: body}} ->
-            channels = Map.get(body, "channels") || List.wrap(body)
-            extract_edges(channels, top_pubkeys)
+        if pk == "" do
+          []
+        else
+          # mempool.space: GET /api/v1/lightning/channels?public_key=...&status=open
+          # (path /nodes/{pubkey}/channels returns 404). Response is a JSON array; each
+          # item has "node" => %{"public_key" => peer} (counterparty). Paginate with index.
+          channels = fetch_open_channels_pages(client, pk, 5)
 
-          _ ->
-            []
+          __MODULE__.MempoolChannelRows.edges_between_top_nodes(channels, pk, top_pubkeys)
         end
       end,
       max_concurrency: 10,
-      timeout: 15_000,
+      timeout: 30_000,
       on_timeout: :kill_task
     )
     |> Enum.flat_map(fn
@@ -133,35 +131,89 @@ defmodule BitcoinexExplorer.ChannelsCache do
     |> deduplicate_edges()
   end
 
-  defp extract_edges(channels, top_pubkeys) when is_list(channels) do
-    Enum.flat_map(channels, fn ch ->
-      n1 =
-        LightningGraph.normalize_public_key(
-          Map.get(ch, "node1_public_key") || Map.get(ch, "node1PublicKey") || ""
-        )
+  defp fetch_open_channels_pages(client, pubkey, max_pages) do
+    0..(max_pages - 1)
+    |> Enum.reduce_while([], fn page, acc ->
+      query =
+        [public_key: pubkey, status: "open"] ++
+          if(page == 0, do: [], else: [index: page * 10])
 
-      n2 =
-        LightningGraph.normalize_public_key(
-          Map.get(ch, "node2_public_key") || Map.get(ch, "node2PublicKey") || ""
-        )
+      case Tesla.get(client, "/api/v1/lightning/channels", query: query) do
+        {:ok, %Env{status: 200, body: body}} when is_list(body) ->
+          if body == [] do
+            {:halt, acc}
+          else
+            new_acc = acc ++ body
 
-      cap = Map.get(ch, "capacity") || 0
+            if length(body) < 10 or page == max_pages - 1 do
+              {:halt, new_acc}
+            else
+              {:cont, new_acc}
+            end
+          end
 
-      if MapSet.member?(top_pubkeys, n1) and MapSet.member?(top_pubkeys, n2) and n1 != n2 do
-        [a, b] = Enum.sort([n1, n2])
-        [%{source: a, target: b, capacity: cap}]
-      else
-        []
+        _ ->
+          {:halt, acc}
       end
     end)
   end
-
-  defp extract_edges(_, _), do: []
 
   defp deduplicate_edges(edges) do
     edges
     |> Enum.uniq_by(fn e -> {e.source, e.target} end)
     |> Enum.sort_by(& &1.capacity, :desc)
     |> Enum.take(400)
+  end
+
+  defmodule MempoolChannelRows do
+    @moduledoc false
+
+    alias BitcoinexExplorer.LightningGraph
+
+    @spec edges_between_top_nodes(list(), String.t(), MapSet.t()) ::
+            list(%{source: String.t(), target: String.t(), capacity: term()})
+    def edges_between_top_nodes(channels, local_pk, top_pubkeys) when is_list(channels) do
+      Enum.flat_map(channels, fn ch ->
+        {n1, n2, cap} = channel_endpoints(ch, local_pk)
+
+        if MapSet.member?(top_pubkeys, n1) and MapSet.member?(top_pubkeys, n2) and n1 != n2 do
+          [a, b] = Enum.sort([n1, n2])
+          [%{source: a, target: b, capacity: cap}]
+        else
+          []
+        end
+      end)
+    end
+
+    def edges_between_top_nodes(_, _, _), do: []
+
+    defp channel_endpoints(ch, local_pk) do
+      cap = Map.get(ch, "capacity") || 0
+
+      case Map.get(ch, "node") do
+        %{"public_key" => peer} when is_binary(peer) ->
+          a = LightningGraph.normalize_public_key(local_pk)
+          b = LightningGraph.normalize_public_key(peer)
+          {a, b, cap}
+
+        %{public_key: peer} when is_binary(peer) ->
+          a = LightningGraph.normalize_public_key(local_pk)
+          b = LightningGraph.normalize_public_key(peer)
+          {a, b, cap}
+
+        _ ->
+          n1 =
+            LightningGraph.normalize_public_key(
+              Map.get(ch, "node1_public_key") || Map.get(ch, "node1PublicKey") || ""
+            )
+
+          n2 =
+            LightningGraph.normalize_public_key(
+              Map.get(ch, "node2_public_key") || Map.get(ch, "node2PublicKey") || ""
+            )
+
+          {n1, n2, cap}
+      end
+    end
   end
 end

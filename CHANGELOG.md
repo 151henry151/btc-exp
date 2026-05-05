@@ -5,10 +5,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.30] - 2026-05-04
+
+Lightning graph work after **0.4.24** (channels query API, layout, focus mode, in-graph labels); condensed **`README.md`**; GitHub source at **`151henry151/btc-exp`**:
+
+- **`ChannelsCache`**: fetch open channels via **`GET /api/v1/lightning/channels`** (**`public_key`**, **`status=open`**, paginated **`index`**) instead of the broken **`/nodes/{pubkey}/channels`** path; parse peer from **`node.public_key`**; add **`MempoolChannelRows`** tests.
+- **`LightningGraph` hook**: widen force-layout spacing; **`normalize_public_key/1`** for ids and edges; client-side link normalization and filtered **`forceLink`**; **`from_data/2`** drops isolated nodes from the payload.
+- **Focus mode**: click a node to pin it at the center, BFS ring seeding, radial/link tuning, sticky detail panel (**Clear focus**, background click clears), transient hover when unfocused; curved edges with hover/focus incidence highlighting and dimmed non-incident links; focus-mode hub spokes use gentler curves.
+- **In-circle labels**: truncated aliases with font size from node radius and canvas **`measureText`**; legend **Hover for name** / **Click for details**; drop mempool sourcing footnote under the graph.
+- **E2E**: **`channels.spec.ts`** asserts focus panel after graph interaction.
+- Condense **`README.md`**: add table of contents; merge stack/architecture and trim production/Esplora notes; shorten self-hosting and tests sections.
+- Point app footer **GitHub** link at **`151henry151/btc-exp`**; trim **`README`** quick-links table (drop self-referential source row).
+
 ## [0.4.24] - 2026-05-03
 
 - **`LightningGraph`**: add **`normalize_public_key/1`** and use it for node **`id`**s and **`from_data/2`** edge endpoints so mempool channel keys match ranking nodes even when casing differs.
-- **`ChannelsCache`**: normalize pubkeys for **`top_pubkeys`**, channel fetches, and **`extract_edges/2`**; **`URI.encode`** node keys in Tesla paths.
+- **`ChannelsCache`**: normalize pubkeys for **`top_pubkeys`** and channel-side parsing (legacy node-key path attempts superseded by query-style channels API in later release).
 - **`LightningGraph` hook** (**`hooks.js`**): normalize ids/links in the client, filter links to known nodes, seed near-center positions, strengthen **link/center/collide** forces, and draw slightly brighter edges with safe stroke widths.
 
 ## [0.4.23] - 2026-05-03
@@ -48,18 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add **`MempoolFeeDisplay`** and show **3 blk** / **6 blk** on the home mempool fee strip only when their sat/vB estimate differs from **Next**.
 - Lay out the fee strip with **`flex flex-wrap`** so two to four cards align when optional targets are hidden.
 - Reformat **`ChannelsCache`** Tesla **`get`** call and **`ExplorerLive`** Lightning stats / caption markup (whitespace only).
-
-## [0.4.15] - 2026-05-03
-
-- **`/channels`**: Fetch real channel edges between top-100 nodes via
-  `Task.async_stream` in **`ChannelsCache`** (10 concurrent requests, 15s timeout,
-  400-edge cap sorted by capacity); feed edges into D3 **`forceLink`** in
-  **`LightningGraph`** hook so node position reflects actual network topology.
-- **`LightningGraph.from_data/2`**: new function accepting nodes + edges; edges
-  filtered to top-100 set and mapped for D3 consumption.
+- **`/channels`**: fetch real channel edges between top-100 nodes via **`Task.async_stream`** in **`ChannelsCache`** (10 concurrent requests, 15s timeout, 400-edge cap sorted by capacity); feed edges into D3 **`forceLink`** in **`LightningGraph`** hook so node position reflects actual network topology.
+- **`LightningGraph.from_data/2`**: new function accepting nodes + edges; edges filtered to top-100 set and mapped for D3 consumption.
 - Increase canvas height to **500px**; edge line width encodes channel capacity.
 
 ## [0.4.14] - 2026-05-03
+
+Esplora dashboard cache and pacing, **`EsploraHttpGate`**, HTTP **429** handling and visitor copy, mobile QR scan, **`OP_RETURN`** in **`OutputClassifier`** / **`TxFlow`**, fee heatmap and recent mempool table, address **`assign_async`** UTXOs, **`/channels`** Lightning stats (**`ChannelsCache`**, **`LightningGraph`**), **`BlockHeader`** dissector, **`MEMPOOL_BASE_URL`**, and **`ExplorerLive`** polish:
 
 - Run **`assign_async`** for address **UTXOs** from **`load_address/2`** when connected so the async task always tracks the same load path as chain lookup.
 - Split **home dashboard** Esplora fetch across **`handle_info`** steps (plus defer initial fetch) so **`phx-change`** decode is not blocked behind long **`get_recent_blocks`** calls.
@@ -68,70 +75,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`LightningGraph`** hook: **`simulation.on("tick")`** circle positions; tooltip **`div`** positioned with **`d3.pointer`** inside **`relative`** **`#lightning-graph`**.
 - **Block dissector**: **`dissector_field_style/1`** legend, colored field rows, hex spans aligned to fields, orange border on the toggle when open.
 - **Playwright e2e**: **`decodeSection`** helpers scoped to **Decode locally** (avoid mempool **`dl`**); **`#decode-result`** / **`#decode-error`** hooks where applicable.
-
-## [0.4.13] - 2026-05-02
-
 - Preserve **`dissector_open`** and **`selected_field`** when **`load_block`** reloads the **same** block map so **`handle_params`** / reconnect does not close the anatomy panel after **`toggle_dissector`**.
 - Add **`FeeHeatmap`** hook and **recent mempool** table on the home dashboard; poll **`mempool_recent`** on the existing mempool interval (**120s**) alongside mempool stats.
 - Add **`address_utxos`** / **`UtxoEnrichment`** with **`assign_async`** and an **Unspent outputs** section on the address page.
 - Add **`/channels`** (**Lightning Network** stats + **`LightningGraph`** D3 hook), **`ChannelsCache`** (mempool.space Lightning API), **`MEMPOOL_BASE_URL`**, and a **Channels** nav link.
 - Add block header **`BlockHeader`** module and **Dissect this block** anatomy panel on block pages.
 - Document **`MEMPOOL_BASE_URL`** in **`.env.production.example`**; run **`mix assets.deploy`** for hook releases.
-
-## [0.4.12] - 2026-05-01
-
 - Show **About** in the header only from **`md`** up; on smaller screens link to the static landing page from the footer nav instead.
-
-## [0.4.11] - 2026-05-01
-
 - Place mobile QR scan controls **beside** the nav search and decode fields (not inside the inputs); use a shared **QR code** outline icon (Heroicons-style) in fixed **40×40** tap targets.
-
-## [0.4.10] - 2026-05-01
-
 - Single-flight concurrent **`EsploraCache.get_or_fetch`** misses so many dashboard viewers do not each run full **`recent_blocks`** pagination against anonymous Esplora limits.
 - Raise prod defaults **`ESPLORA_CACHE_TTL_MS`** to **60s** and **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** to **450** ms; load **50** recent blocks on the home dashboard (was **100**).
-
-## [0.4.9] - 2026-04-30
-
 - Add mobile-only (**`md:hidden`**) **Scan QR code** camera buttons on the nav search field and **Decode locally** textarea via **`QrScan`** LiveView hook (**jsqr** + **`getUserMedia`**); normalize **`bitcoin:`** / **`lightning:`** URI payloads before filling the field; submit the search form after a successful nav scan.
-
-## [0.4.8] - 2026-04-30
-
 - Map Esplora **`scriptpubkey_type`** **`op_return`** to chart bucket **`op_return`** and **`OP_RETURN`** flow-node labels in **`OutputClassifier`** / **`TxFlow`**.
 - Add **`op_return`** stroke color and **`OP_RETURN`** click/no-navigation handling in **`TxFlowGraph`**; widen vertical spacing when there are four or more outputs; thicken coinbase→TX edges slightly.
 - Use **`unknown`** instead of **`non-standard`** for vin prevouts missing address and type in **`TxEnrichment`**.
-
-## [0.4.7] - 2026-04-30
-
 - Remove Live blocks caption line and footer Esplora / Bitcoinex attribution from **`ExplorerLive`**.
-
-## [0.4.6] - 2026-04-30
-
 - Load home dashboard Esplora data only when **`connected?(socket)`** (skip disconnected **`handle_params`** pass).
 - Schedule initial **`poll_blocks`** / **`poll_mempool`** after the normal poll intervals instead of **100** ms.
-
-## [0.4.5] - 2026-04-30
-
 - Apply **`mix format`** across **`lib/`**, **`test/`**, and **`config/`** inputs from **`.formatter.exs`**.
-
-## [0.4.4] - 2026-04-30
-
 - Space **`EsploraHttpGate`** by **request start** time (not response completion); raise prod default **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** to **300** ms.
 - Retry **`Esplora`** GETs once after **HTTP 429** with **`ESPLORA_429_RETRY_DELAY_MS`** / **`ESPLORA_HTTP_MAX_ATTEMPTS`** (defaults **2000** ms and **2** tries).
 - Restore **`EsploraCache`** wrapping on **`recent_blocks`**, **`mempool`**, and **`fee_estimates`**; restore **`EsploraCache.init_table`** in **`Application.start/2`**.
 - Document reference nginx limits and Blockstream Explorer API / dashboard policy in **`README.md`**; expand **`.env.production.example`**.
-
-## [0.4.3] - 2026-04-30
-
 - Add **`BitcoinexExplorer.EsploraHttpGate`** (supervised when **`DATA_SOURCE=esplora`**): serialize Esplora HTTP and enforce **`ESPLORA_MIN_REQUEST_INTERVAL_MS`** between completions (prod default **250** ms when unset).
 - Route **`Esplora`** **`get_json`** / **`get_raw`** through the gate when the interval is positive.
-
-## [0.4.2] - 2026-04-30
-
 - Replace technical **HTTP 429** LiveView copy with plain-language text for visitors.
-
-## [0.4.1] - 2026-04-30
-
 - Add **`BitcoinexExplorer.EsploraCache`** (ETS, configurable **`ESPLORA_CACHE_TTL_MS`**, prod default **45s**) for **`recent_blocks`**, **`mempool`**, and **`fee-estimates`** Esplora calls.
 - Reduce home **`recent_blocks`** request size to **25**; slow LiveView polls (**60s** blocks, **120s** mempool).
 - Improve dashboard live-blocks caption in **`ExplorerLive`**; document caching and rate limits in **`README.md`** and **`.env.production.example`**.
@@ -168,9 +136,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Expand **`README.md`** tests section with per-suite and per-case rationale (**ExUnit** + **Playwright**).
 - Rewrite production deployment notes without referencing private infrastructure repos; simplify **`.env.production.example`** comments.
-
-## [0.2.6] - 2026-04-30
-
 - Format Lightning **amount (sats)** as plain integers and **amount (BTC)** as fixed-point decimals (no scientific notation); use **`Decimal`** for BTC strings.
 - Replace PSBT “unsigned tx id” placeholder with an explanation that **unsigned PSBTs don't have a valid txid until finalized**.
 - Add **`decimal`** as a direct **`mix.exs`** dependency; document it in **`README.md`**.
@@ -178,21 +143,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.5] - 2026-04-30
 
 - Expand **`README.md`** with architecture, auto-detection order, production env summary, and accurate stack versions.
-
-## [0.2.4] - 2026-04-30
-
 - Add footer links to **hromp.com**, **about** (landing page), **GitHub** (this repo), and make **RiverFinancial/bitcoinex** a clickable upstream link.
-
-## [0.2.3] - 2026-04-30
-
 - Move combined paste hint into the textarea **label**; remove duplicate subtitle under the title.
-
-## [0.2.2] - 2026-04-30
-
 - Replace tabbed Address / Invoice / PSBT UI with a **single textarea**; **auto-detect** payload type (BOLT11 if `ln…`, PSBT if base64 magic `cHNid…`, otherwise Bitcoin address decode).
 - Show **Input type** row in decoded results; remove **`switch_tab`** LiveView event.
-
-## [0.2.1] - 2026-04-30
-
 - Add headless Chromium Playwright end-to-end tests under **`e2e/`** (addresses, Lightning invoices, PSBTs, UI edge cases).
 - Document **`e2e/`** usage and **`BASE_URL`** path-mounted deployments in **`README.md`**.

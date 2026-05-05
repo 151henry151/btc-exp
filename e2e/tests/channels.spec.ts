@@ -19,3 +19,13 @@ test("home Lightning section shows stats labels when cache is warm", async ({ pa
   await expect(section.getByText("Channels", { exact: true })).toBeVisible();
   await expect(section.getByText("Capacity", { exact: true })).toBeVisible();
 });
+
+test("Lightning graph click opens focus panel with clear control", async ({ page }) => {
+  await page.goto("./");
+  const graph = page.locator("#home-lightning-graph");
+  const firstCircle = graph.locator("svg circle").first();
+  await expect(firstCircle).toBeVisible({ timeout: 45_000 });
+  await firstCircle.click();
+  await expect(graph.getByRole("button", { name: /clear focus/i })).toBeVisible({ timeout: 10_000 });
+  await expect(graph.getByText(/channels in this graph/i)).toBeVisible();
+});

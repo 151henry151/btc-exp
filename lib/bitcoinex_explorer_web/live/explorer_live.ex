@@ -758,7 +758,7 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
           </a>
           <span class="text-zinc-600 md:hidden">·</span>
           <.link
-            href="https://github.com/151henry151/bitcoinex-explorer"
+            href="https://github.com/151henry151/btc-exp"
             class="text-zinc-400 underline-offset-2 hover:text-[#f7931a] hover:underline"
             target="_blank"
             rel="noopener noreferrer"
@@ -1062,11 +1062,13 @@ defmodule BitcoinexExplorerWeb.ExplorerLive do
             </svg>
             <span>Node size = channel capacity</span>
           </div>
-          <span>Hover a node for details</span>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span>Hover for name</span>
+            <span class="text-zinc-600">·</span>
+            <span>Click for details</span>
+          </div>
         </div>
-        <p class="text-xs text-zinc-500 mt-1">
-          Top 100 nodes by liquidity. Data sourced from mempool.space.
-        </p>
+        <p class="text-xs text-zinc-500 mt-1">Top 100 nodes by liquidity.</p>
       </section>
     </div>
     """
