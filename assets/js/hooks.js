@@ -877,15 +877,27 @@ export const LightningGraph = {
         .attr("stroke", (d) => {
           const s = lightningLinkEndpointId(d.source)
           const t = lightningLinkEndpointId(d.target)
-          if (fid && (s === fid || t === fid)) return "#e4e4e7"
-          if (!fid && hid && (s === hid || t === hid)) return "#a1a1aa"
+          const touchesFocus = !!(fid && (s === fid || t === fid))
+          const touchesHover = !!(hid && (s === hid || t === hid))
+
+          if (fid && touchesHover && hid !== fid) return "#cbd5e1"
+          if (fid && touchesFocus) return "#e4e4e7"
+          if (!fid && touchesHover) return "#a1a1aa"
           return "#52525b"
         })
         .attr("stroke-opacity", (d) => {
           const s = lightningLinkEndpointId(d.source)
           const t = lightningLinkEndpointId(d.target)
-          if (fid) return s === fid || t === fid ? 0.92 : 0.06
-          if (hid) return s === hid || t === hid ? 0.88 : 0.07
+          const touchesFocus = !!(fid && (s === fid || t === fid))
+          const touchesHover = !!(hid && (s === hid || t === hid))
+
+          if (fid) {
+            if (hid && touchesHover && hid !== fid)
+              return touchesFocus ? 0.98 : 0.9
+            if (touchesFocus) return 0.92
+            return 0.06
+          }
+          if (hid && touchesHover) return 0.88
           return 0.13
         })
         .attr("stroke-width", (d) => {
@@ -893,9 +905,10 @@ export const LightningGraph = {
           const base = 0.48 + (cap / edgeCapMax) * 2.45
           const s = lightningLinkEndpointId(d.source)
           const t = lightningLinkEndpointId(d.target)
-          const hi =
-            (fid && (s === fid || t === fid)) ||
-            (!fid && hid && (s === hid || t === hid))
+          const touchesFocus = !!(fid && (s === fid || t === fid))
+          const touchesHover = !!(hid && (s === hid || t === hid))
+          const hiOther = !!(fid && hid && hid !== fid && touchesHover)
+          const hi = touchesFocus || (!fid && touchesHover) || hiOther
           return hi ? base * 1.5 : base * 0.55
         })
     }
@@ -1016,11 +1029,8 @@ export const LightningGraph = {
 
     nodeG
       .on("mousemove", (event, d) => {
-        if (!hook.focusNodeId) {
-          hook._edgeHoverId = d.id
-          refreshEdgeStyles()
-        }
-        if (hook.focusNodeId) return
+        hook._edgeHoverId = d.id
+        refreshEdgeStyles()
         const containerRect = el.getBoundingClientRect()
         const mx = event.clientX - containerRect.left
         const my = event.clientY - containerRect.top
@@ -1034,11 +1044,9 @@ export const LightningGraph = {
           .style("top", `${my - 24}px`)
       })
       .on("mouseleave", () => {
-        if (!hook.focusNodeId) {
-          hook._edgeHoverId = null
-          refreshEdgeStyles()
-        }
-        if (!hook.focusNodeId) hoverTip.classed("hidden", true)
+        hook._edgeHoverId = null
+        refreshEdgeStyles()
+        hoverTip.classed("hidden", true)
       })
       .on("click", (event, d) => {
         event.stopPropagation()

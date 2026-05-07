@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions **`0.2.5`** through **`0.4.22`** documented below were **beta** milestones during active development (readiness and correctness varied; some revisions were unsuitable for real use). **`1.0.0`** is the first release tagged as **stable** under semver. Git commit subjects no longer repeat **`Release 0.x.x:`**; version intent lives in this file and in **`VERSION`** / **`mix.exs`**.
 
+## [1.0.5] - 2026-05-06
+
+- **`LightningGraph`**: in **focus** mode, keep **hover** tooltip and edge emphasis for **non-focus** nodes (**`refreshEdgeStyles`** combines focus hub edges with transient **`_edgeHoverId`** highlighting).
+
 ## [1.0.4] - 2026-05-06
 
 - **`LightningGraph`**: keep synchronous layout on **first paint** only; run **`restart()`** with live **`tick`** updates for **focus / clear-focus** transitions; when animating into focus keep non-hub **`x`/`y`** until forces settle (**`preserveNeighborXY`** seeding).
