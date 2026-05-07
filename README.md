@@ -18,6 +18,7 @@ Nav **About** → landing; app footer links **GitHub** (source) and upstream Bit
 - [Run locally](#run-locally)
 - [Tests](#tests)
 - [Known limitations](#known-limitations)
+- [Roadmap](#roadmap)
 
 ---
 
@@ -28,6 +29,12 @@ Nav **About** → landing; app footer links **GitHub** (source) and upstream Bit
 **Search** (`BitcoinexExplorer.Search`): 64-char hex → tx then block; numeric → height; address → page; else local decode.
 
 **Decode locally** (home): debounced textarea only — **no** chain calls. Order: **`ln…`** (BOLT11) → PSBT base64 (`cHNid…`) → address (SegWit then Base58).
+
+---
+
+## Roadmap
+
+- **Lightning graph — past → present animation** (planned): morph the home Lightning force layout from a **saved** topology toward **current** data. Mempool APIs do not expose historical **node rankings + edges**; this needs **local snapshots**. Daily JSON files are written in production under **`priv/data/lightning_snapshots/`** (override or disable with **`LIGHTNING_SNAPSHOT_DIR`** — see **`.env.production.example`**). Details: **[`docs/lightning-graph-history.md`](docs/lightning-graph-history.md)**.
 
 ---
 

@@ -21,3 +21,4 @@ config :phoenix_live_view,
 config :bitcoinex_explorer, esplora_429_retry_delay_ms: 15
 
 config :bitcoinex_explorer, start_channels_cache: false
+config :bitcoinex_explorer, lightning_snapshot_dir: :disabled

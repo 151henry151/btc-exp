@@ -8,6 +8,7 @@ defmodule BitcoinexExplorer.ChannelsCache do
   alias Tesla.Env
 
   alias BitcoinexExplorer.LightningGraph
+  alias BitcoinexExplorer.LightningSnapshot
 
   @ttl_ms 10 * 60 * 1000
 
@@ -23,6 +24,7 @@ defmodule BitcoinexExplorer.ChannelsCache do
   def handle_continue(:fetch, state) do
     case fetch_both() do
       {:ok, data} ->
+        :ok = LightningSnapshot.maybe_write(data)
         now = System.monotonic_time(:millisecond)
         {:noreply, %{state | data: data, fetched_at: now, error: nil}}
 
@@ -54,6 +56,7 @@ defmodule BitcoinexExplorer.ChannelsCache do
   def handle_info(:refresh, state) do
     case fetch_both() do
       {:ok, data} ->
+        :ok = LightningSnapshot.maybe_write(data)
         now = System.monotonic_time(:millisecond)
         {:noreply, %{state | data: data, fetched_at: now, error: nil}}
 

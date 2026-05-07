@@ -38,3 +38,6 @@ npm-debug.log
 # Production env (secrets) on the server
 .env.production
 
+# Daily Lightning graph snapshots (see docs/lightning-graph-history.md)
+/priv/data/
+

@@ -120,6 +120,24 @@ config :bitcoinex_explorer,
   esplora_min_request_interval_ms: esplora_min_request_interval_ms,
   mempool_base_url: mempool_base_url
 
+lightning_snapshot_dir =
+  case System.get_env("LIGHTNING_SNAPSHOT_DIR", "") |> String.trim() |> String.downcase() do
+    "" ->
+      if config_env() == :prod do
+        {:app_priv, ~w(priv data lightning_snapshots)}
+      else
+        :disabled
+      end
+
+    "disable" ->
+      :disabled
+
+    path ->
+      {:absolute, Path.expand(path)}
+  end
+
+config :bitcoinex_explorer, lightning_snapshot_dir: lightning_snapshot_dir
+
 if config_env() == :prod do
   config :bitcoinex_explorer, start_channels_cache: true
 end

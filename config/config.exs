@@ -28,7 +28,8 @@ config :bitcoinex_explorer,
   esplora_http_max_attempts: 2,
   esplora_429_retry_delay_ms: 2_000,
   mempool_base_url: "https://mempool.space",
-  start_channels_cache: false
+  start_channels_cache: false,
+  lightning_snapshot_dir: :disabled
 
 # Configures the endpoint
 config :bitcoinex_explorer, BitcoinexExplorerWeb.Endpoint,
