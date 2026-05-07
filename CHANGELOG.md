@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Versions **`0.2.5`** through **`0.4.22`** documented below were **beta** milestones during active development (readiness and correctness varied; some revisions were unsuitable for real use). **`1.0.0`** is the first release tagged as **stable** under semver. Git commit subjects no longer repeat **`Release 0.x.x:`**; version intent lives in this file and in **`VERSION`** / **`mix.exs`**.
 
+## [1.0.1] - 2026-05-06
+
+- **`LightningGraph`** (**`hooks.js`**): skip full re-render only when **`dataset.graph`** is unchanged **and** an **`svg`** is still present (LiveView patches can clear hook children without changing the dataset); seed non-focus layout on a deterministic ring instead of random jitter; increase **`d3-force`** cooling (**`velocityDecay`**, **`alphaDecay`**) and use **`alphaMin`** **`0.001`**; pin **`fx`/`fy`** on simulation **`end`** with finite-coordinate guards so nodes stop drifting after settle.
+
 ## [1.0.0] - 2026-05-05
 
 - Bump **`VERSION`** and **`mix.exs`** to **`1.0.0`**.

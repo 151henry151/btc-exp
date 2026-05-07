@@ -654,9 +654,15 @@ export const LightningGraph = {
   mounted() {
     if (this.focusNodeId === undefined) this.focusNodeId = null
     if (this._edgeHoverId === undefined) this._edgeHoverId = null
+    this._lgLastGraphRaw = undefined
     this.render()
   },
   updated() {
+    const raw = this.el.dataset.graph
+    const payloadUnchanged = raw === this._lgLastGraphRaw
+    const hasSvg = this.el.querySelector("svg")
+    // LiveView can morph the hook root without changing data-graph; skipping render then leaves a blank graph.
+    if (payloadUnchanged && hasSvg) return
     this.render()
   },
   render() {
@@ -764,13 +770,16 @@ export const LightningGraph = {
     const cyMid = height / 2
 
     function seedDefaultPositions() {
-      const jitter = 52
-      for (const d of simulationNodes) {
+      const n = simulationNodes.length
+      const ringR = Math.min(width, height) * 0.26
+      for (let i = 0; i < n; i++) {
+        const d = simulationNodes[i]
         d.fx = null
         d.fy = null
         delete d._layer
-        d.x = cxMid + (Math.random() - 0.5) * jitter
-        d.y = cyMid + (Math.random() - 0.5) * jitter
+        const theta = (2 * Math.PI * i) / n - Math.PI / 2
+        d.x = cxMid + ringR * Math.cos(theta)
+        d.y = cyMid + ringR * Math.sin(theta)
         d.vx = 0
         d.vy = 0
       }
@@ -1056,8 +1065,9 @@ export const LightningGraph = {
         .force("charge", charge)
         .force("center", center)
         .force("collide", collide)
-        .alphaDecay(0.02)
-        .alphaMin(focusId ? 0.028 : 0.035)
+        .velocityDecay(0.58)
+        .alphaDecay(focusId ? 0.075 : 0.082)
+        .alphaMin(0.001)
 
       if (focusId) {
         const maxRingPx = Math.min(width, height) / 2 - 28
@@ -1092,6 +1102,16 @@ export const LightningGraph = {
         refreshEdgeStyles()
       })
 
+      sim.on("end", () => {
+        for (const d of simulationNodes) {
+          if (focusId && d.id === focusId) continue
+          const x = Number.isFinite(d.x) ? d.x : cxMid
+          const y = Number.isFinite(d.y) ? d.y : cyMid
+          d.fx = x
+          d.fy = y
+        }
+      })
+
       refreshHubStroke()
       sim.alpha(1).restart()
     }
@@ -1105,6 +1125,8 @@ export const LightningGraph = {
         focusPanel.classed("hidden", false)
       }
     }
+
+    hook._lgLastGraphRaw = raw
 
     hook._cleanup = () => {
       if (sim) sim.stop()
