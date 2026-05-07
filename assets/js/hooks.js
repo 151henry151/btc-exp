@@ -785,7 +785,10 @@ export const LightningGraph = {
       }
     }
 
-    function seedFocusPositions(focusId) {
+    /** @param {{ preserveNeighborXY?: boolean }} [opts] */
+    function seedFocusPositions(focusId, opts = {}) {
+      const preserveNeighborXY = opts.preserveNeighborXY === true
+
       const dist = lightningBfsLayers(focusId, linksPlainSnapshot)
       const far = lightningFarthestHop(dist)
       const outerLayer = far + 1
@@ -815,22 +818,42 @@ export const LightningGraph = {
         byLayer.get(layer).push(d)
       }
 
-      const maxRing = Math.min(width, height) / 2 - 36
-      const innerRing = 52
-      const ringGap = 36
+      if (!preserveNeighborXY) {
+        const maxRing = Math.min(width, height) / 2 - 36
+        const innerRing = 52
+        const ringGap = 36
 
-      const sortedLayers = Array.from(byLayer.keys()).sort((a, b) => a - b)
-      for (const layer of sortedLayers) {
-        const group = byLayer.get(layer)
-        group.sort((a, b) => a.id.localeCompare(b.id))
-        const r = Math.min(innerRing + (layer - 1) * ringGap, maxRing)
-        group.forEach((d, i) => {
-          const theta = (2 * Math.PI * i) / group.length - Math.PI / 2
-          d.x = cxMid + r * Math.cos(theta)
-          d.y = cyMid + r * Math.sin(theta)
-          d.vx = 0
-          d.vy = 0
-        })
+        const sortedLayers = Array.from(byLayer.keys()).sort((a, b) => a - b)
+        for (const layer of sortedLayers) {
+          const group = byLayer.get(layer)
+          group.sort((a, b) => a.id.localeCompare(b.id))
+          const r = Math.min(innerRing + (layer - 1) * ringGap, maxRing)
+          group.forEach((d, i) => {
+            const theta = (2 * Math.PI * i) / group.length - Math.PI / 2
+            d.x = cxMid + r * Math.cos(theta)
+            d.y = cyMid + r * Math.sin(theta)
+            d.vx = 0
+            d.vy = 0
+          })
+        }
+      } else {
+        for (const d of simulationNodes) {
+          if (d.id !== focusId) {
+            d.vx = 0
+            d.vy = 0
+          }
+        }
+      }
+    }
+
+    /** Keep current coords; drop pins so simulation can reorganize unfocus forces. */
+    function unfocusPreservePositions() {
+      for (const d of simulationNodes) {
+        d.fx = null
+        d.fy = null
+        delete d._layer
+        d.vx = 0
+        d.vy = 0
       }
     }
 
@@ -943,7 +966,7 @@ export const LightningGraph = {
         hook._edgeHoverId = null
         focusPanel.classed("hidden", true)
         hoverTip.classed("hidden", true)
-        mountSimulation()
+        mountSimulation({ animate: true })
       })
 
     const el = hook.el
@@ -987,7 +1010,7 @@ export const LightningGraph = {
         hook._edgeHoverId = null
         focusPanel.classed("hidden", true)
         hoverTip.classed("hidden", true)
-        mountSimulation()
+        mountSimulation({ animate: true })
       })
     }
 
@@ -1024,7 +1047,7 @@ export const LightningGraph = {
         hoverTip.classed("hidden", true)
         fillFocusPanel(d)
         focusPanel.classed("hidden", false)
-        mountSimulation()
+        mountSimulation({ animate: true })
       })
 
     let sim = null
@@ -1042,15 +1065,32 @@ export const LightningGraph = {
       refreshEdgeStyles()
     }
 
-    function mountSimulation() {
+    function pinFrozenLayout(focusId) {
+      for (const d of simulationNodes) {
+        if (focusId && d.id === focusId) continue
+        const x = Number.isFinite(d.x) ? d.x : cxMid
+        const y = Number.isFinite(d.y) ? d.y : cyMid
+        d.fx = x
+        d.fy = y
+      }
+    }
+
+    /** @param {{ animate?: boolean }} [opts] */
+    function mountSimulation(opts = {}) {
+      const animate = opts.animate === true
+
       if (sim) {
+        sim.on("tick", null)
+        sim.on("end", null)
         sim.stop()
         sim = null
       }
 
       const focusId = hook.focusNodeId
       if (focusId) {
-        seedFocusPositions(focusId)
+        seedFocusPositions(focusId, { preserveNeighborXY: animate })
+      } else if (animate) {
+        unfocusPreservePositions()
       } else {
         seedDefaultPositions()
       }
@@ -1103,26 +1143,32 @@ export const LightningGraph = {
       }
 
       sim.stop()
-      sim.alpha(1)
 
-      let guard = 0
-      while (sim.alpha() > sim.alphaMin() && guard++ < 1200) {
-        sim.tick(6)
+      const tickPhysicsDom = () => {
+        applyLightningDomLayout(focusId)
       }
 
-      for (const d of simulationNodes) {
-        if (focusId && d.id === focusId) continue
-        const x = Number.isFinite(d.x) ? d.x : cxMid
-        const y = Number.isFinite(d.y) ? d.y : cyMid
-        d.fx = x
-        d.fy = y
+      if (animate) {
+        sim.on("tick", tickPhysicsDom)
+        sim.on("end", () => {
+          pinFrozenLayout(focusId)
+          tickPhysicsDom()
+          refreshHubStroke()
+        })
+        sim.alpha(1).restart()
+      } else {
+        sim.alpha(1)
+        let guard = 0
+        while (sim.alpha() > sim.alphaMin() && guard++ < 1200) {
+          sim.tick(6)
+        }
+        pinFrozenLayout(focusId)
+        tickPhysicsDom()
+        refreshHubStroke()
       }
-
-      applyLightningDomLayout(focusId)
-      refreshHubStroke()
     }
 
-    mountSimulation()
+    mountSimulation({ animate: false })
 
     if (hook.focusNodeId) {
       const sel = simulationNodes.find((n) => n.id === hook.focusNodeId)
