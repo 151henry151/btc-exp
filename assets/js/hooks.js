@@ -1029,6 +1029,19 @@ export const LightningGraph = {
 
     let sim = null
 
+    function applyLightningDomLayout(focusId) {
+      if (focusId) {
+        const hub = simulationNodes.find((n) => n.id === focusId)
+        if (hub) {
+          hub.fx = cxMid
+          hub.fy = cyMid
+        }
+      }
+      edgeSelection.attr("d", (d) => lightningQuadLinkPath(d, cxClamp, cyClamp, focusId))
+      nodeG.attr("transform", (d) => `translate(${cxClamp(d.x)},${cyClamp(d.y)})`)
+      refreshEdgeStyles()
+    }
+
     function mountSimulation() {
       if (sim) {
         sim.stop()
@@ -1089,31 +1102,24 @@ export const LightningGraph = {
         sim.force("radial", null)
       }
 
-      sim.on("tick", () => {
-        if (focusId) {
-          const hub = simulationNodes.find((n) => n.id === focusId)
-          if (hub) {
-            hub.fx = cxMid
-            hub.fy = cyMid
-          }
-        }
-        edgeSelection.attr("d", (d) => lightningQuadLinkPath(d, cxClamp, cyClamp, focusId))
-        nodeG.attr("transform", (d) => `translate(${cxClamp(d.x)},${cyClamp(d.y)})`)
-        refreshEdgeStyles()
-      })
+      sim.stop()
+      sim.alpha(1)
 
-      sim.on("end", () => {
-        for (const d of simulationNodes) {
-          if (focusId && d.id === focusId) continue
-          const x = Number.isFinite(d.x) ? d.x : cxMid
-          const y = Number.isFinite(d.y) ? d.y : cyMid
-          d.fx = x
-          d.fy = y
-        }
-      })
+      let guard = 0
+      while (sim.alpha() > sim.alphaMin() && guard++ < 1200) {
+        sim.tick(6)
+      }
 
+      for (const d of simulationNodes) {
+        if (focusId && d.id === focusId) continue
+        const x = Number.isFinite(d.x) ? d.x : cxMid
+        const y = Number.isFinite(d.y) ? d.y : cyMid
+        d.fx = x
+        d.fy = y
+      }
+
+      applyLightningDomLayout(focusId)
       refreshHubStroke()
-      sim.alpha(1).restart()
     }
 
     mountSimulation()
